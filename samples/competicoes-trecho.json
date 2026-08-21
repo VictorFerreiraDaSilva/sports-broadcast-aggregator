@@ -1,0 +1,54 @@
+{
+  "sport": "futebol",
+  "version": "2026-07-19",
+  "categoryOrder": [
+    "Destaques",
+    "Eliminatórias",
+    "Brasil",
+    "Regionais",
+    "Estaduais",
+    "Europa",
+    "América do Sul",
+    "América do Norte",
+    "Ásia",
+    "Outros estaduais",
+    "Feminino",
+    "Eliminatórias Feminina",
+    "Base",
+    "Outros"
+  ],
+  "competitions": [
+    {
+      "priority": 1,
+      "name": "Mundial de Seleções",
+      "category": "Destaques",
+      "image": "🌍"
+    },
+    {
+      "priority": 7,
+      "name": "Libertadores",
+      "category": "Destaques",
+      "image": "Libertadores.png",
+      "aliases": [
+        "Copa Libertadores"
+      ]
+    },
+    {
+      "priority": 9,
+      "name": "UEFA Champions League",
+      "category": "Destaques",
+      "image": "UEFA Champions League.png",
+      "darkImage": "UEFA Champions League_n.png"
+    },
+    {
+      "priority": 1,
+      "name": "Brasileirão - Série A",
+      "category": "Brasil",
+      "image": "Brasileirão - Série A.png",
+      "aliases": [
+        "Brasileirão Série A",
+        "Campeonato Brasileiro Série A"
+      ]
+    }
+  ]
+}

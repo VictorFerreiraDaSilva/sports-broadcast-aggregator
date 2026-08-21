@@ -1,0 +1,108 @@
+{
+  "schedule": [
+    {
+      "key": "2026-08-21",
+      "day": "21",
+      "month": "AGO",
+      "weekday": "SEX",
+      "title": "SEXTA, 21 DE AGOSTO DE 2026",
+      "games": [
+        {
+          "sport": "futebol",
+          "time": "13h00",
+          "competition": "Campeonato Saudita",
+          "round": "2ª Rodada",
+          "home": "Al-Riyadh",
+          "away": "Al-Nassr",
+          "broadcast": "XSports e YouTube (GOAT)",
+          "youtubeUrl": "https://www.youtube.com/watch?v=CuUKvR-LoXo",
+          "odds": [
+            "-",
+            "-",
+            "-"
+          ],
+          "iconEmoji": "⚽"
+        },
+        {
+          "sport": "futebol",
+          "time": "14h00",
+          "competition": "Campeonato Peruano",
+          "round": "Clausura - 6ª R",
+          "home": "Cajamarca",
+          "away": "Grau",
+          "broadcast": "",
+          "odds": [
+            "-",
+            "-",
+            "-"
+          ],
+          "country": "pe"
+        },
+        {
+          "sport": "futebol",
+          "time": "13h15",
+          "competition": "Campeonato Saudita",
+          "round": "2ª Rodada",
+          "home": "Al-Hazem",
+          "away": "Al-Diriyah",
+          "broadcast": "",
+          "odds": [
+            "-",
+            "-",
+            "-"
+          ],
+          "iconEmoji": "⚽"
+        },
+        {
+          "sport": "futebol",
+          "time": "15h30",
+          "competition": "Pré-Europa League",
+          "round": "Qualificação - 3ª Fase - VOLTA",
+          "home": "Anderlecht",
+          "away": "PAOK",
+          "broadcast": "YouTube (XSports)",
+          "youtubeUrl": "https://www.youtube.com/watch?v=7VsivjJzthg",
+          "odds": [
+            "-",
+            "-",
+            "-"
+          ],
+          "aggregate": "IDA 1x0",
+          "iconEmoji": "⚽"
+        },
+        {
+          "sport": "futebol",
+          "time": "16h00",
+          "competition": "Brasileirão - Série B",
+          "round": "24ª Rodada",
+          "home": "Ponte Preta",
+          "away": "Avaí",
+          "broadcast": "<> e Disney+",
+          "odds": [
+            "-",
+            "-",
+            "-"
+          ],
+          "country": "br"
+        }
+      ]
+    }
+  ],
+  "availableDates": [
+    "2026-08-14",
+    "2026-08-15",
+    "2026-08-16",
+    "2026-08-17",
+    "2026-08-18",
+    "2026-08-19",
+    "2026-08-20",
+    "2026-08-21",
+    "2026-08-22",
+    "2026-08-23",
+    "2026-08-24",
+    "2026-08-25",
+    "2026-08-26",
+    "2026-08-27",
+    "2026-08-28"
+  ]
+}

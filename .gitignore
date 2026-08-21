@@ -1,0 +1,10 @@
+# cache local do cliente de exemplo
+.cache/
+examples/.cache/
+
+__pycache__/
+*.pyc
+
+# credenciais locais do scraper (docker compose)
+.env
+

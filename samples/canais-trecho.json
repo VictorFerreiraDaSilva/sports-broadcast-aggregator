@@ -1,0 +1,66 @@
+{
+  "version": "2026-08-10",
+  "defaultImage": "📺",
+  "categoryOrder": [
+    "Abertos",
+    "Fechados",
+    "PAY-PER-VIEW",
+    "Streaming pago",
+    "Streaming gratuito",
+    "YouTube",
+    "Outros"
+  ],
+  "channels": [
+    {
+      "priority": 3,
+      "name": "Globo",
+      "category": "Abertos",
+      "color": "Padrão",
+      "darkColor": "Padrão",
+      "image": "Globo.svg",
+      "selectedImage": "Globo_c.svg"
+    },
+    {
+      "priority": 6,
+      "name": "SBT",
+      "category": "Abertos",
+      "color": "Padrão",
+      "darkColor": "Padrão",
+      "image": "SBT.svg"
+    },
+    {
+      "priority": 7,
+      "name": "ESPN 4",
+      "category": "Fechados",
+      "color": "Padrão",
+      "darkColor": "Padrão",
+      "image": "ESPN.svg"
+    },
+    {
+      "priority": 1,
+      "name": "Premiere",
+      "category": "PAY-PER-VIEW",
+      "color": "Padrão",
+      "darkColor": "Padrão",
+      "image": "Premiere.svg"
+    },
+    {
+      "priority": 3,
+      "name": "Disney+",
+      "category": "Streaming pago",
+      "color": "Vermelho",
+      "darkColor": "Vermelho claro",
+      "image": "Disney+.svg",
+      "darkImage": "Disney+_n.svg",
+      "selectedImage": "Disney+_c.svg"
+    },
+    {
+      "priority": 1,
+      "name": "YouTube",
+      "category": "Streaming gratuito",
+      "color": "Azul",
+      "darkColor": "Verde claro",
+      "image": "YouTube.svg"
+    }
+  ]
+}

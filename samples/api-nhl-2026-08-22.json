@@ -1,0 +1,59 @@
+{
+  "schedule": [
+    {
+      "key": "2026-08-22",
+      "day": "22",
+      "month": "AGO",
+      "weekday": "SAB",
+      "title": "SÁBADO, 22 DE AGOSTO DE 2026",
+      "games": [
+        {
+          "sport": "futebol",
+          "time": "20h00",
+          "competition": "NHL",
+          "round": "Pré-temporada",
+          "home": "Boston Bruins",
+          "away": "Philadelphia Flyers",
+          "broadcast": "",
+          "odds": [
+            "-",
+            "-",
+            "-"
+          ],
+          "iconEmoji": "⚽"
+        },
+        {
+          "sport": "futebol",
+          "time": "20h00",
+          "competition": "NHL",
+          "round": "Pré-temporada",
+          "home": "Buffalo Sabres",
+          "away": "Columbus Blue Jackets",
+          "broadcast": "",
+          "odds": [
+            "-",
+            "-",
+            "-"
+          ],
+          "iconEmoji": "⚽"
+        },
+        {
+          "sport": "futebol",
+          "time": "20h00",
+          "competition": "NHL",
+          "round": "Pré-temporada",
+          "home": "Carolina Hurricanes",
+          "away": "Florida Panthers",
+          "broadcast": "",
+          "odds": [
+            "-",
+            "-",
+            "-"
+          ],
+          "iconEmoji": "⚽"
+        }
+      ]
+    }
+  ],
+  "availableDates": []
+}

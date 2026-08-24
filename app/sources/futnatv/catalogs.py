@@ -1,6 +1,7 @@
 """Sincronização dos catálogos estáticos (canais.json, competicoes-futebol.json)
-e os índices de casamento usados por app/ingest.py para resolver
-`broadcast`/`competition` (texto livre) em `channel`/`competition` (dimensão).
+e os índices de casamento usados por app/sources/futnatv/source.py para
+resolver `broadcast`/`competition` (texto livre) em `channel`/`competition`
+(dimensão) — tudo escopado a `source_code="futnatv"` (ADR 0003).
 
 Os `?v=` da API são só cache-buster (ver docs/notas-de-campo.md #12); a versão
 real do conteúdo é o campo `version` de dentro do JSON. Só regravamos quando
@@ -15,23 +16,26 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
-from app.client import Futnatv
-from app.models import CatalogMeta, Channel, Competition
-from app.normalize import family_fallback, normalize_key
+from app.core.models import CatalogMeta, Channel, Competition
+from app.sources.futnatv.client import Futnatv
+from app.sources.futnatv.config import FUTNATV_SOURCE_CODE
+from app.sources.futnatv.normalize import family_fallback, normalize_key
 
 log = logging.getLogger(__name__)
 
 
 def _catalog_version(session: Session, key: str) -> str | None:
-    row = session.get(CatalogMeta, key)
+    row = session.get(CatalogMeta, (FUTNATV_SOURCE_CODE, key))
     return row.version if row else None
 
 
 def _set_catalog_version(session: Session, key: str, version: str) -> None:
     stmt = (
         pg_insert(CatalogMeta)
-        .values(key=key, version=version)
-        .on_conflict_do_update(index_elements=[CatalogMeta.key], set_={"version": version})
+        .values(source_code=FUTNATV_SOURCE_CODE, key=key, version=version)
+        .on_conflict_do_update(
+            index_elements=[CatalogMeta.source_code, CatalogMeta.key], set_={"version": version}
+        )
     )
     session.execute(stmt)
 
@@ -46,6 +50,7 @@ def sync_channels(session: Session, client: Futnatv) -> dict:
         stmt = (
             pg_insert(Channel)
             .values(
+                source_code=FUTNATV_SOURCE_CODE,
                 name=item["name"],
                 category=item["category"],
                 priority=item["priority"],
@@ -58,7 +63,7 @@ def sync_channels(session: Session, client: Futnatv) -> dict:
                 catalog_version=version,
             )
             .on_conflict_do_update(
-                index_elements=[Channel.name],
+                index_elements=[Channel.source_code, Channel.name],
                 set_={
                     "category": item["category"],
                     "priority": item["priority"],
@@ -89,6 +94,7 @@ def sync_competitions(session: Session, client: Futnatv) -> dict:
         stmt = (
             pg_insert(Competition)
             .values(
+                source_code=FUTNATV_SOURCE_CODE,
                 name=item["name"],
                 category=item["category"],
                 priority=item["priority"],
@@ -99,7 +105,7 @@ def sync_competitions(session: Session, client: Futnatv) -> dict:
                 catalog_version=version,
             )
             .on_conflict_do_update(
-                index_elements=[Competition.name],
+                index_elements=[Competition.source_code, Competition.name],
                 set_={
                     "category": item["category"],
                     "priority": item["priority"],
@@ -136,7 +142,8 @@ class ChannelIndex:
 
     def __init__(self, session: Session):
         self._by_key: dict[str, int] = {}
-        for ch in session.scalars(select(Channel)):
+        stmt = select(Channel).where(Channel.source_code == FUTNATV_SOURCE_CODE)
+        for ch in session.scalars(stmt):
             self._by_key[normalize_key(ch.name)] = ch.id
             for alias in ch.aliases or []:
                 self._by_key.setdefault(normalize_key(alias), ch.id)
@@ -156,7 +163,8 @@ class CompetitionIndex:
 
     def __init__(self, session: Session):
         self._by_key: dict[str, int] = {}
-        for comp in session.scalars(select(Competition)):
+        stmt = select(Competition).where(Competition.source_code == FUTNATV_SOURCE_CODE)
+        for comp in session.scalars(stmt):
             self._by_key[normalize_key(comp.name)] = comp.id
             for alias in comp.aliases or []:
                 self._by_key.setdefault(normalize_key(alias), comp.id)

@@ -16,11 +16,11 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
 
-from app.config import (
-    BASE_URL,
-    REQUEST_DELAY_SECONDS,
-    REQUEST_TIMEOUT_SECONDS,
-    USER_AGENT,
+from app.sources.futnatv.config import (
+    FUTNATV_BASE_URL as BASE_URL,
+    FUTNATV_REQUEST_DELAY_SECONDS as REQUEST_DELAY_SECONDS,
+    FUTNATV_REQUEST_TIMEOUT_SECONDS as REQUEST_TIMEOUT_SECONDS,
+    FUTNATV_USER_AGENT as USER_AGENT,
 )
 
 log = logging.getLogger(__name__)

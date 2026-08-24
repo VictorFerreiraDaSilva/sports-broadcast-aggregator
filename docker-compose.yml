@@ -21,7 +21,7 @@ services:
       timeout: 5s
       retries: 10
 
-  scraper:
+  aggregator:
     build: .
     restart: unless-stopped
     depends_on:
@@ -30,7 +30,7 @@ services:
         required: false  # só espera o `db` local se o profile "local-db" estiver ativo
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://fut:fut@db:5432/fut}
-      CONTACT_INFO: ${CONTACT_INFO:-fut-scraper/1.0 (uso pessoal; sem contato configurado)}
+      FUTNATV_CONTACT_INFO: ${FUTNATV_CONTACT_INFO:-fut-scraper/1.0 (uso pessoal; sem contato configurado)}
       RUN_ON_STARTUP: ${RUN_ON_STARTUP:-true}
       TZ: ${TZ:-America/Sao_Paulo}
     extra_hosts:

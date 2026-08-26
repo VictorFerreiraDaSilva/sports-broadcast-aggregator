@@ -283,6 +283,14 @@ class ScrapeRun(Base):
     job_type: Mapped[str] = mapped_column(String(16), nullable=False)  # "games" | "catalog"
     started_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     finished_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
-    status: Mapped[str] = mapped_column(String(16), nullable=False)  # success | error
+    # success  = execução limpa
+    # degraded = gravou o que deu, mas engoliu erros pelo caminho (ADR 0007);
+    #            a contagem e os grupos ficam em `details`
+    # error    = perdeu a execução inteira; a causa fica em `error_message`
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    # Além do resultado do job (ex.: games_count), carrega `errors_collected` e
+    # `error_groups` quando a execução engoliu erros — inclusive nos runs
+    # "error", onde os parciais anteriores à falha fatal se perderiam.
     details: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    # Só a falha fatal. Erro parcial não escreve aqui — ver `details`.
     error_message: Mapped[str | None] = mapped_column(Text)

@@ -36,6 +36,13 @@ log = logging.getLogger(__name__)
 _SPORT_MAP = {sport: sport for sport in FUTNATV_SPORTS}
 
 
+def _brief(raw: dict, limit: int = 200) -> str:
+    """Identificação curta de um jogo cru, para a mensagem de erro — o payload
+    inteiro estouraria o corpo de 1024 caracteres do Pushover."""
+    text = repr(raw)
+    return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
 class FutnatvSource:
     code = FUTNATV_SOURCE_CODE
     name = FUTNATV_SOURCE_NAME
@@ -68,16 +75,35 @@ class FutnatvSource:
                 try:
                     payload = self._client.day(sport, day_key)
                 except FutnatvError as exc:
-                    log.error("erro ao buscar %s %s: %s", sport, day_key, exc)
+                    log.error(
+                        "erro ao buscar %s %s: %s: %s",
+                        sport, day_key, type(exc).__name__, exc,
+                    )
                     continue
 
                 for day_obj in payload.get("schedule", []):
                     for raw in day_obj.get("games", []):
-                        games.append(
-                            self._normalize_game(
-                                raw, _SPORT_MAP[sport], day_obj["key"], competitions, channels, teams
+                        # Um jogo malformado (campo que sumiu, horário num
+                        # formato novo) não pode derrubar os outros ~500 da
+                        # execução — descarta só ele. O `log.error` é o que faz
+                        # o descarte chegar até a notificação (ADR 0007): sem
+                        # ele, isto seria perda de dado silenciosa.
+                        try:
+                            games.append(
+                                self._normalize_game(
+                                    raw,
+                                    _SPORT_MAP[sport],
+                                    day_obj.get("key", ""),
+                                    competitions,
+                                    channels,
+                                    teams,
+                                )
                             )
-                        )
+                        except Exception as exc:  # noqa: BLE001
+                            log.error(
+                                "jogo descartado (%s %s): %s: %s | payload=%s",
+                                sport, day_key, type(exc).__name__, exc, _brief(raw),
+                            )
         return games
 
     def _normalize_game(

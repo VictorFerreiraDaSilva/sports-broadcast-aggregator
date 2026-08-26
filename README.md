@@ -11,7 +11,8 @@ Ver [CONTEXT.md](CONTEXT.md) para o glossário (Fonte, Jogo, Esporte canônico, 
 
 ```
 app/
-├── core/            → genérico: schema, orquestrador, protocol Source, upsert
+├── core/            → genérico: schema, orquestrador, protocol Source, upsert,
+│                      coleta de erros + notificação (errors.py, notify.py)
 └── sources/
     ├── futnatv/      → fonte real, sobre a API de futnatv.net
     └── _example/     → fonte fake (dados hardcoded, sem rede) — prova o contrato
@@ -47,7 +48,7 @@ Núcleo enxuto e comum a todas as fontes; peculiaridades de uma fonte (odds, íc
 | `game` | um jogo por linha, **por fonte que o relatou**; chave natural = `(source_code, sport_code, game_date, time_raw, home_text, away_text)` — sem fusão entre fontes |
 | `game_broadcast` | tokens de `broadcast_raw` já casados contra `channel` pela própria fonte |
 | `catalog_meta` | última `version` sincronizada de cada catálogo, por fonte |
-| `scrape_run` | log de auditoria de cada execução de job, por fonte |
+| `scrape_run` | log de auditoria de cada execução de job, por fonte — `status` é `success`, `degraded` (gravou, mas engoliu erros) ou `error` |
 
 ## Rodando (Docker Compose)
 
@@ -68,6 +69,90 @@ docker compose run --rm aggregator games              # coleta jogos de todas as
 docker compose run --rm aggregator games --source futnatv
 docker compose run --rm aggregator catalog             # sincroniza o catálogo de toda fonte que tiver um
 ```
+
+## Notificações de erro
+
+O agregador roda desatendido, então toda falha que valha a pena saber vira um push no
+[Pushover](https://pushover.net) (ver [ADR 0007](docs/adr/0007-notificacao-de-erros-por-logging.md)).
+
+```bash
+# em .env — crie a aplicação em https://pushover.net/apps/build
+PUSHOVER_TOKEN=...
+PUSHOVER_USER_KEY=...
+```
+
+**Sem essas duas variáveis o notificador fica inerte** e nada mais muda: os erros continuam indo
+para o log e para a tabela `scrape_run`. É o que permite rodar os testes e o dev local sem
+configurar nada nem tocar a rede.
+
+O que notifica, e com que prioridade Pushover:
+
+| Situação | Prioridade | Efeito no celular |
+|---|---|---|
+| Banco inacessível no boot | `1` | fura as quiet hours |
+| Job inteiro falhou | `0` | som normal |
+| Execução degradada — gravou, mas engoliu erros pelo caminho | `-1` | mudo, só na lista |
+| Execução sem nenhum jogo, e sem erro algum | `-1` | mudo |
+| Job do scheduler estourou, ou execução perdida | `-1` | mudo |
+
+Duas regras que valem mais que a tabela:
+
+- **Execução limpa não notifica.** Um push por coleta bem-sucedida, 4x/dia por fonte, treinaria
+  qualquer um a ignorar os pushes.
+- **No máximo um push por execução.** Uma coleta da futnatv são 20 requisições; com a API fora do
+  ar, notificar por erro daria 80 pushes/dia. Os erros são agregados por assinatura e resumidos
+  numa mensagem só:
+
+  ```
+  fut · futnatv/games degradado                     (prioridade -1)
+
+  16 erros engolidos durante a execução.
+
+  sources.futnatv.source ×16
+    erro ao buscar futebol 2026-08-27: FutnatvError: HTTP 503
+    (+15 iguais)
+
+  142 jogo(s) gravado(s) · run #1284
+  ```
+
+Toda execução que notifica também **fica registrada** em `scrape_run` — o push é o alerta, o
+banco é o histórico:
+
+| Situação | `status` | `details` |
+|---|---|---|
+| Limpa | `success` | `games_count` |
+| Degradada | `degraded` | `+ errors_collected`, `error_groups` (todos os grupos, estruturados) |
+| Falhou | `error` | `+ errors_collected`, `error_groups`; a causa fatal em `error_message` |
+
+Isso é o que torna a **degradação lenta** detectável: cada push de prioridade `-1` passa batido
+sozinho, mas a soma não. Quantas das últimas execuções foram degradadas:
+
+```sql
+SELECT source_code, status, count(*)
+FROM scrape_run
+WHERE job_type = 'games' AND started_at > now() - interval '7 days'
+GROUP BY source_code, status;
+```
+
+E quais erros, por tipo — agregando pelo `template` do `log.error`, sem parsing de string:
+
+```sql
+SELECT g->>'template' AS tipo, sum((g->>'count')::int) AS total, max(g->>'example') AS exemplo
+FROM scrape_run, jsonb_array_elements(details->'error_groups') AS g
+WHERE started_at > now() - interval '7 days'
+GROUP BY 1 ORDER BY 2 DESC;
+```
+
+A coleta desses erros não passa por nenhum canal novo: `collect_errors()`
+([app/core/errors.py](app/core/errors.py)) pluga um `logging.Handler` durante a execução do job e
+agrega tudo que `app.*` logar em nível ERROR. O `log.error` que uma fonte já escreve ao engolir um
+erro *é* o sinal — **uma fonte nova não precisa saber que este sistema existe**, só continuar
+logando seus erros.
+
+Variáveis opcionais (defaults em [.env.example](.env.example)): `PUSHOVER_APP_NAME` prefixa o
+título para distinguir instâncias, `DB_WAIT_NOTIFY_AFTER_SECONDS` define quanto tempo de banco
+fora do ar tolera antes de incomodar (abaixo disso, um restart rotineiro do Postgres passa
+despercebido) e `MISFIRE_GRACE_SECONDS` separa "o job atrasou" de "o job não rodou".
 
 ## Testes
 

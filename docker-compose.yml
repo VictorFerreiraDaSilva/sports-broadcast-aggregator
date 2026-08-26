@@ -33,6 +33,15 @@ services:
       FUTNATV_CONTACT_INFO: ${FUTNATV_CONTACT_INFO:-fut-scraper/1.0 (uso pessoal; sem contato configurado)}
       RUN_ON_STARTUP: ${RUN_ON_STARTUP:-true}
       TZ: ${TZ:-America/Sao_Paulo}
+      # Notificações de erro (ADR 0007). Vazio = notificador inerte; os erros
+      # continuam no log e em `scrape_run`.
+      PUSHOVER_TOKEN: ${PUSHOVER_TOKEN:-}
+      PUSHOVER_USER_KEY: ${PUSHOVER_USER_KEY:-}
+      PUSHOVER_APP_NAME: ${PUSHOVER_APP_NAME:-fut}
+      PUSHOVER_TIMEOUT_SECONDS: ${PUSHOVER_TIMEOUT_SECONDS:-10}
+      DB_WAIT_NOTIFY_AFTER_SECONDS: ${DB_WAIT_NOTIFY_AFTER_SECONDS:-60}
+      DB_WAIT_MAX_SECONDS: ${DB_WAIT_MAX_SECONDS:-0}
+      MISFIRE_GRACE_SECONDS: ${MISFIRE_GRACE_SECONDS:-300}
     extra_hosts:
       # permite usar "host.docker.internal" no DATABASE_URL quando o Postgres
       # externo roda no próprio host (fora de container) — no-op caso contrário.

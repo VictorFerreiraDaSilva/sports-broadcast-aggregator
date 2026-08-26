@@ -90,4 +90,4 @@ zero no banco de `DATABASE_URL`, então aponte para um Postgres descartável.
 
 ## Status
 
-Este repositório ainda não tem remoto configurado.
+Remoto configurado em [github.com/VictorFerreiraDaSilva/sports-broadcast-aggregator](https://github.com/VictorFerreiraDaSilva/sports-broadcast-aggregator).

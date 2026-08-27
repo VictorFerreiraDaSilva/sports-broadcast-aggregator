@@ -8,6 +8,6 @@ canônico). O código hoje em `app/client.py`, `app/normalize.py`, `app/catalogs
 do futnatv) move para `app/sources/futnatv/`.
 
 A documentação de engenharia reversa da API (`docs/api-reference.md`, `docs/schemas.md`,
-`docs/notas-de-campo.md`, `docs/legal-e-etiqueta.md`), os `samples/` e `examples/futnatv.py`
+`docs/field-notes.md`, `docs/legal-and-etiquette.md`), os `samples/` e `examples/futnatv.py`
 também são específicos do futnatv — não do agregador — e movem junto para dentro de
 `sources/futnatv/`.

@@ -1,12 +1,12 @@
-"""Teste de contrato: garante que a interface `Source` (app/core/source.py) é
-genérica de verdade, exercitando-a contra toda fonte registrada — não só
-contra futnatv. app/sources/_example/ existe para tornar isso possível sem
-rede (ADR 0001/0004/0005).
+"""Contract test: ensures the `Source` interface (app/core/source.py) is
+genuinely generic, by exercising it against every registered source — not only
+against futnatv. app/sources/_example/ exists to make that possible without a
+network (ADR 0001/0004/0005).
 
-Requer DATABASE_URL (ver tests/conftest.py) para os testes que tocam banco.
-Os testes puramente estruturais (identidade, capacidade opcional) também
-precisam de DATABASE_URL só porque app.core.registry importa app.core.config
-no import chain — não fazem nenhuma query.
+Requires DATABASE_URL (see tests/conftest.py) for the tests that touch the
+database. The purely structural tests (identity, optional capability) also need
+DATABASE_URL, but only because app.core.registry imports app.core.config in the
+import chain — they run no query at all.
 """
 
 from __future__ import annotations
@@ -34,23 +34,23 @@ def test_source_exposes_fetch_games(source):
 
 
 def test_catalog_sync_is_an_optional_capability():
-    """ADR 0004: sync_catalog não é exigido pelo Protocol — cada fonte só
-    aparece com a capacidade se de fato a implementar."""
+    """ADR 0004: sync_catalog is not required by the Protocol — a source only
+    shows up with the capability if it actually implements it."""
     codes_with_catalog = {s.code for s in SOURCES if hasattr(s, "sync_catalog")}
     codes_without_catalog = {s.code for s in SOURCES if not hasattr(s, "sync_catalog")}
 
     assert "futnatv" in codes_with_catalog
     assert "_example" in codes_without_catalog
 
-    # quem tem a capacidade também declara quando ela roda
+    # whoever has the capability also declares when it runs
     for source in SOURCES:
         if hasattr(source, "sync_catalog"):
             assert len(source.catalog_schedule) > 0
 
 
 def test_example_source_round_trip(db_session):
-    """Fim a fim contra banco de verdade: fetch_games -> upsert_games ->
-    reconsulta, e idempotência no natural key (source_code, sport_code,
+    """End to end against a real database: fetch_games -> upsert_games ->
+    re-query, plus idempotence on the natural key (source_code, sport_code,
     game_date, time_raw, home_text, away_text)."""
     from app.sources._example.source import ExampleSource
 
@@ -58,7 +58,7 @@ def test_example_source_round_trip(db_session):
     dates = [dt.date(2026, 8, 24)]
 
     games = source.fetch_games(db_session, dates)
-    assert games, "fonte de exemplo deveria devolver pelo menos um jogo"
+    assert games, "the example source should return at least one game"
     for game in games:
         assert isinstance(game, NormalizedGame)
         assert game.sport_code
@@ -69,7 +69,7 @@ def test_example_source_round_trip(db_session):
     count_first = upsert_games(db_session, source.code, games)
     db_session.commit()
 
-    # recaptura os mesmos dados: upsert não deve duplicar linhas
+    # recapture the same data: upsert must not duplicate rows
     games_again = source.fetch_games(db_session, dates)
     count_second = upsert_games(db_session, source.code, games_again)
     db_session.commit()

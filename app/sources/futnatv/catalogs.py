@@ -1,11 +1,11 @@
-"""Sincronização dos catálogos estáticos (canais.json, competicoes-futebol.json)
-e os índices de casamento usados por app/sources/futnatv/source.py para
-resolver `broadcast`/`competition` (texto livre) em `channel`/`competition`
-(dimensão) — tudo escopado a `source_code="futnatv"` (ADR 0003).
+"""Syncing of the static catalogs (canais.json, competicoes-futebol.json) and
+the matching indexes used by app/sources/futnatv/source.py to resolve
+`broadcast`/`competition` (free text) into `channel`/`competition` (dimension)
+— all of it scoped to `source_code="futnatv"` (ADR 0003).
 
-Os `?v=` da API são só cache-buster (ver docs/notas-de-campo.md #12); a versão
-real do conteúdo é o campo `version` de dentro do JSON. Só regravamos quando
-essa versão muda.
+The API's `?v=` is only a cache buster (see docs/field-notes.md #12); the real
+content version is the `version` field inside the JSON. We only rewrite when
+that version changes.
 """
 
 from __future__ import annotations
@@ -80,7 +80,7 @@ def sync_channels(session: Session, client: Futnatv) -> dict:
         session.execute(stmt)
 
     _set_catalog_version(session, "canais", version)
-    log.info("catálogo de canais sincronizado: %d itens, version=%s", len(payload.get("channels", [])), version)
+    log.info("channel catalog synced: %d items, version=%s", len(payload.get("channels", [])), version)
     return {"skipped": False, "version": version, "count": len(payload.get("channels", []))}
 
 
@@ -121,7 +121,7 @@ def sync_competitions(session: Session, client: Futnatv) -> dict:
 
     _set_catalog_version(session, "competicoes_futebol", version)
     log.info(
-        "catálogo de competições sincronizado: %d itens, version=%s",
+        "competition catalog synced: %d items, version=%s",
         len(payload.get("competitions", [])),
         version,
     )
@@ -134,11 +134,11 @@ def sync_all_catalogs(session: Session, client: Futnatv) -> dict:
     return {"channels": channels, "competitions": competitions}
 
 
-# --------------------------------------------------------------------------- índices de casamento
+# ------------------------------------------------------------------------------ matching indexes
 
 
 class ChannelIndex:
-    """nome/alias normalizado -> Channel.id, com fallback de família (ESPN 4 -> ESPN)."""
+    """normalized name/alias -> Channel.id, with a family fallback (ESPN 4 -> ESPN)."""
 
     def __init__(self, session: Session):
         self._by_key: dict[str, int] = {}
@@ -159,7 +159,7 @@ class ChannelIndex:
 
 
 class CompetitionIndex:
-    """nome/alias normalizado -> Competition.id."""
+    """normalized name/alias -> Competition.id."""
 
     def __init__(self, session: Session):
         self._by_key: dict[str, int] = {}

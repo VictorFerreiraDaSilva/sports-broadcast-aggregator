@@ -1,10 +1,10 @@
-"""Registro explícito de fontes ativas (ADR 0001).
+"""Explicit registry of active sources (ADR 0001).
 
-Adicionar uma fonte é editar a lista `SOURCES` abaixo — nada mais no core
-muda. Import tardio (dentro do módulo, não no topo de app/core/*) evitaria
-o acoplamento inverso; como é o próprio registro que precisa conhecer as
-fontes, o import aqui é o único lugar do core que sabe que "futnatv" e
-"_example" existem.
+Adding a source means editing the `SOURCES` list below — nothing else in the
+core changes. A late import (inside the module, not at the top of app/core/*)
+would avoid the inverted coupling; since it is the registry itself that has to
+know the sources, the import here is the only place in the core that knows
+"futnatv" and "_example" exist.
 """
 
 from __future__ import annotations
@@ -27,12 +27,12 @@ def get_source(code: str) -> Source:
     for source in SOURCES:
         if source.code == code:
             return source
-    raise KeyError(f"fonte desconhecida: {code!r} (registradas: {[s.code for s in SOURCES]})")
+    raise KeyError(f"unknown source: {code!r} (registered: {[s.code for s in SOURCES]})")
 
 
 def seed_sources(session: Session) -> None:
-    """Upsert de `source` a partir do registro — a dimensão é derivada do
-    código, não digitada à mão numa migration (ADR 0001)."""
+    """Upsert `source` from the registry — the dimension is derived from code,
+    not hand-typed into a migration (ADR 0001)."""
     for source in SOURCES:
         stmt = (
             pg_insert(SourceRow)

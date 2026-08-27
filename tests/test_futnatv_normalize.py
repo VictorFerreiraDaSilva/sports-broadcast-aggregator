@@ -1,7 +1,8 @@
-"""Testes das funções de parsing puro da fonte futnatv — sem rede nem banco.
+"""Tests for the futnatv source's pure parsing functions — no network, no
+database.
 
-app/sources/futnatv/normalize.py não importa nada de app.core, então este
-arquivo roda mesmo sem DATABASE_URL configurada.
+app/sources/futnatv/normalize.py imports nothing from app.core, so this file
+runs even with no DATABASE_URL configured.
 """
 
 from app.sources.futnatv.normalize import (

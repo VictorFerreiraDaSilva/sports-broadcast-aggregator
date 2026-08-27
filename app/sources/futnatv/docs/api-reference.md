@@ -136,7 +136,7 @@ Não trate `availableDates[0]` e `availableDates[-1]` como um intervalo — iter
 | Infra | Cloudflare (headers `cf-ray`, `nel`, `report-to`) |
 | Latência | ~0,5 s por requisição, estável em amostra de 5 |
 | Autenticação | Nenhuma. Sem chave, sem cookie, sem `Referer` obrigatório. |
-| Rate limit | Nenhum observado — ~150 requisições em poucos minutos passaram sem bloqueio. Isso **não** é garantia; veja [legal-e-etiqueta.md](legal-e-etiqueta.md). |
+| Rate limit | Nenhum observado — ~150 requisições em poucos minutos passaram sem bloqueio. Isso **não** é garantia; veja [legal-and-etiquette.md](legal-and-etiquette.md). |
 
 ### Erros
 

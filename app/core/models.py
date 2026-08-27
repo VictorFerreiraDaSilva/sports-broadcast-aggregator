@@ -1,21 +1,21 @@
-"""Schema central do agregador (ver docs/adr/0002, 0003, 0006 para o porquê).
+"""The aggregator's central schema (see docs/adr/0002, 0003, 0006 for the why).
 
-- `source`: dimensão das fontes registradas (ADR 0001), seedada a partir do
-  registro em app/core/registry.py — não é um catálogo digitado à mão aqui.
-- `sport`: a única dimensão compartilhada entre fontes — um vocabulário
-  pequeno e fechado que cada adapter mapeia o seu próprio para (ADR 0003).
-- `channel`, `competition`, `team`: dimensões escopadas por fonte
-  (`source_code` entra na unicidade) — o mesmo nome em fontes diferentes é
-  uma linha diferente, sem tentativa de fusão (ADR 0002/0003).
-- `game`: fato, uma linha por jogo *por fonte que o relatou* — `source_code`
-  entra na chave natural (ADR 0002). Colunas peculiares de uma fonte (odds,
-  ícones, payload cru, ...) não têm coluna própria aqui: vão em
-  `source_data: JSONB`, opaco ao core (ADR 0006).
-- `game_broadcast`: quebra de `broadcast_raw` em tokens casados com
-  `channel` — a fonte já entrega isso resolvido (ver app/core/source.py).
-- `catalog_meta`: `version` do catálogo já sincronizado, por fonte, para não
-  regravar quando não mudou.
-- `scrape_run`: log de auditoria de cada execução de job, por fonte.
+- `source`: dimension of registered sources (ADR 0001), seeded from the
+  registry in app/core/registry.py — not a catalog hand-typed here.
+- `sport`: the only dimension shared across sources — a small, closed
+  vocabulary that each adapter maps its own onto (ADR 0003).
+- `channel`, `competition`, `team`: source-scoped dimensions (`source_code` is
+  part of the uniqueness) — the same name in different sources is a different
+  row, with no attempt at merging (ADR 0002/0003).
+- `game`: the fact table, one row per game *per source that reported it* —
+  `source_code` is part of the natural key (ADR 0002). Columns peculiar to a
+  single source (odds, icons, raw payload, ...) get no column of their own
+  here: they go into `source_data: JSONB`, opaque to the core (ADR 0006).
+- `game_broadcast`: `broadcast_raw` split into tokens matched against
+  `channel` — the source hands this over resolved (see app/core/source.py).
+- `catalog_meta`: `version` of the catalog already synced, per source, to
+  avoid rewriting when nothing changed.
+- `scrape_run`: audit log of each job run, per source.
 """
 
 from __future__ import annotations
@@ -45,7 +45,7 @@ class Base(DeclarativeBase):
 
 
 class Source(Base):
-    """Uma fonte registrada em app/core/registry.py (ADR 0001)."""
+    """A source registered in app/core/registry.py (ADR 0001)."""
 
     __tablename__ = "source"
 
@@ -54,7 +54,7 @@ class Source(Base):
 
 
 class Sport(Base):
-    """Esporte canônico, compartilhado por todas as fontes (ADR 0003)."""
+    """Canonical sport, shared by every source (ADR 0003)."""
 
     __tablename__ = "sport"
 
@@ -63,7 +63,7 @@ class Sport(Base):
 
 
 class Channel(Base):
-    """Catálogo de canais/plataformas de uma fonte — escopado por `source_code`."""
+    """A source's channel/platform catalog — scoped by `source_code`."""
 
     __tablename__ = "channel"
     __table_args__ = (
@@ -95,7 +95,7 @@ class Channel(Base):
 
 
 class Competition(Base):
-    """Catálogo de competições de uma fonte — escopado por `source_code`."""
+    """A source's competition catalog — scoped by `source_code`."""
 
     __tablename__ = "competition"
     __table_args__ = (
@@ -125,10 +125,10 @@ class Competition(Base):
 
 
 class Team(Base):
-    """Dimensão derivada de `home`/`away` — escopada por `source_code`.
+    """Dimension derived from `home`/`away` — scoped by `source_code`.
 
-    Sem ID estável na origem; a chave é o nome normalizado (sem acento,
-    casefold) dentro da fonte.
+    No stable ID at the origin; the key is the normalized name (accent-free,
+    casefolded) within the source.
     """
 
     __tablename__ = "team"
@@ -157,11 +157,11 @@ class Team(Base):
 
 
 class Game(Base):
-    """Um jogo, do jeito que uma fonte específica o relatou (ADR 0002).
+    """A game, the way one specific source reported it (ADR 0002).
 
-    Chave natural = (source_code, sport_code, game_date, time_raw, home_text,
-    away_text) — nenhuma fonte dá ID de jogo estável. O mesmo jogo real
-    relatado por duas fontes gera duas linhas independentes, sem fusão.
+    Natural key = (source_code, sport_code, game_date, time_raw, home_text,
+    away_text) — no source provides a stable game ID. The same real game
+    reported by two sources yields two independent rows, with no merging.
     """
 
     __tablename__ = "game"
@@ -226,11 +226,11 @@ class Game(Base):
 
 
 class GameBroadcast(Base):
-    """Um token de `broadcast_raw` casado (ou não) com `channel`.
+    """A `broadcast_raw` token matched (or not) against `channel`.
 
-    A fonte já resolveu o casamento (ver app/core/source.py); esta tabela só
-    guarda o resultado. Não carrega `source_code` próprio — herda o da fonte
-    do jogo via `game_id`.
+    The source already resolved the match (see app/core/source.py); this table
+    only stores the result. It carries no `source_code` of its own — it
+    inherits the game's source through `game_id`.
     """
 
     __tablename__ = "game_broadcast"
@@ -257,7 +257,7 @@ class GameBroadcast(Base):
 
 
 class CatalogMeta(Base):
-    """`version` do catálogo já gravado por fonte, para não regravar à toa."""
+    """`version` of the catalog already written, per source, to avoid pointless rewrites."""
 
     __tablename__ = "catalog_meta"
 
@@ -272,7 +272,7 @@ class CatalogMeta(Base):
 
 
 class ScrapeRun(Base):
-    """Log de auditoria de cada execução de job, por fonte."""
+    """Audit log of each job run, per source."""
 
     __tablename__ = "scrape_run"
 
@@ -283,14 +283,14 @@ class ScrapeRun(Base):
     job_type: Mapped[str] = mapped_column(String(16), nullable=False)  # "games" | "catalog"
     started_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     finished_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
-    # success  = execução limpa
-    # degraded = gravou o que deu, mas engoliu erros pelo caminho (ADR 0007);
-    #            a contagem e os grupos ficam em `details`
-    # error    = perdeu a execução inteira; a causa fica em `error_message`
+    # success  = clean run
+    # degraded = wrote what it could, but swallowed errors along the way
+    #            (ADR 0007); the count and the groups live in `details`
+    # error    = lost the entire run; the cause lives in `error_message`
     status: Mapped[str] = mapped_column(String(16), nullable=False)
-    # Além do resultado do job (ex.: games_count), carrega `errors_collected` e
-    # `error_groups` quando a execução engoliu erros — inclusive nos runs
-    # "error", onde os parciais anteriores à falha fatal se perderiam.
+    # Besides the job result (e.g. games_count), carries `errors_collected` and
+    # `error_groups` when the run swallowed errors — including on "error" runs,
+    # where the partials preceding the fatal failure would otherwise be lost.
     details: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
-    # Só a falha fatal. Erro parcial não escreve aqui — ver `details`.
+    # Fatal failure only. A partial error does not write here — see `details`.
     error_message: Mapped[str | None] = mapped_column(Text)

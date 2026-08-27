@@ -47,7 +47,7 @@ tempos, porque temporada que acabou volta.
 
 Não há endpoint de intervalo. Para uma semana, são 7 requisições por esporte. Com os 5 esportes,
 uma janela de 15 dias custa 75 requisições. Faça sequencial com pausa; veja
-[legal-e-etiqueta.md](legal-e-etiqueta.md).
+[legal-and-etiquette.md](legal-and-etiquette.md).
 
 ## 5. `availableDates` não lista as datas que têm jogos
 

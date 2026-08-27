@@ -1,30 +1,31 @@
-"""Coleta de erros parciais de uma execução, via `logging` (ADR 0007).
+"""Collection of a run's partial errors, through `logging` (ADR 0007).
 
-O problema: uma fonte que engole um erro para continuar (ex.: futnatv pula uma
-data que a API recusou) termina com o job em `status="success"` — o core não
-tem como saber que 16 de 20 requisições falharam. Notificar exige que esse erro
-chegue até `app/core/jobs.py`.
+The problem: a source that swallows an error to keep going (e.g. futnatv skips
+a date the API refused) finishes with the job at `status="success"` — the core
+has no way to know that 16 out of 20 requests failed. Notifying requires that
+error to reach `app/core/jobs.py`.
 
-A solução escolhida é não inventar canal novo: `collect_errors()` pluga um
-`logging.Handler` durante a execução e agrega tudo que a aplicação logar em
-nível ERROR ou acima. O `log.error(...)` que a fonte já escreve *é* o sinal —
-nenhuma fonte precisa saber que este módulo existe, nem que Pushover existe
-(a promessa do README: "adicionar uma fonte nova não toca app/core/" vale
-também na direção contrária).
+The chosen solution is to invent no new channel: `collect_errors()` plugs a
+`logging.Handler` in for the duration of the run and aggregates everything the
+application logs at ERROR level or above. The `log.error(...)` the source
+already writes *is* the signal — no source needs to know this module exists,
+nor that Pushover exists (the README's promise, "adding a new source does not
+touch app/core/", holds in the opposite direction too).
 
-Dois cuidados que o handler precisa ter:
+Two things the handler has to get right:
 
-- **Escopo de logger.** Só escuta a árvore `app.*`; um `log.error` de urllib3
-  ou do SQLAlchemy não é falha de coleta e não deve virar push.
-- **Escopo de thread.** O APScheduler executa jobs num pool de threads, então
-  duas coletas podem estar rodando ao mesmo tempo. O handler é global (está
-  pendurado no logger `app`), mas só aceita registros da thread que abriu o
-  coletor — senão os erros de um job vazariam para a notificação do outro.
+- **Logger scope.** It listens only to the `app.*` tree; a `log.error` from
+  urllib3 or SQLAlchemy is not a collection failure and must not become a push.
+- **Thread scope.** APScheduler runs jobs in a thread pool, so two collections
+  may be running at the same time. The handler is global (it hangs off the
+  `app` logger), but only accepts records from the thread that opened the
+  collector — otherwise one job's errors would leak into the other's
+  notification.
 
-A agregação é por *assinatura* (logger + template da mensagem + tipo da
-exceção), não pela mensagem já formatada: as 16 falhas de
-`"erro ao buscar %s %s: %s"` colapsam num grupo só com contagem 16, em vez de
-16 linhas quase idênticas dentro do push.
+Aggregation is by *signature* (logger + message template + exception type),
+not by the already-formatted message: the 16 failures of
+`"error fetching %s %s: %s"` collapse into a single group with count 16,
+instead of 16 nearly identical lines inside the push.
 """
 
 from __future__ import annotations
@@ -35,23 +36,23 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Iterator
 
-# Raiz da árvore de loggers da aplicação. Todo módulo usa
-# `logging.getLogger(__name__)`, e `__name__` sempre começa com "app.".
+# Root of the application's logger tree. Every module uses
+# `logging.getLogger(__name__)`, and `__name__` always starts with "app.".
 APP_LOGGER_NAME = "app"
 
-# Quantos grupos distintos cabem no corpo da notificação antes de resumir o
-# resto numa linha só — o corpo do Pushover tem 1024 caracteres.
+# How many distinct groups fit in the notification body before the rest is
+# summarized in a single line — the Pushover body holds 1024 characters.
 MAX_GROUPS_IN_SUMMARY = 5
 
 
 @dataclass
 class ErrorGroup:
-    """Erros com a mesma assinatura, colapsados."""
+    """Errors sharing a signature, collapsed together."""
 
     logger_name: str
-    # O template do `log.error` ("erro ao buscar %s %s"), não a mensagem já
-    # formatada: é ele que define o grupo, e é o único campo estável o
-    # bastante para agregar por tipo de erro numa consulta posterior.
+    # The `log.error` template ("error fetching %s %s"), not the formatted
+    # message: it is what defines the group, and the only field stable enough
+    # to aggregate by error type in a later query.
     template: str
     exc_type: str | None
     first_message: str
@@ -59,18 +60,19 @@ class ErrorGroup:
 
     @property
     def label(self) -> str:
-        """Como o grupo se identifica numa mensagem.
+        """How the group identifies itself in a message.
 
-        Sem `exc_info` (o caso comum: a fonte logou um erro que ela mesma já
-        tratou), o melhor rótulo disponível é o módulo que reportou — sem o
-        prefixo "app.", que é o mesmo para todos e só ocupa espaço.
+        Without `exc_info` (the common case: the source logged an error it had
+        already handled itself), the best label available is the reporting
+        module — minus the "app." prefix, which is the same for all of them and
+        only takes up space.
         """
         return self.exc_type or self.logger_name.removeprefix(f"{APP_LOGGER_NAME}.")
 
 
 @dataclass
 class CollectedErrors:
-    """Resultado de um `collect_errors()` — vazio quando nada falhou."""
+    """Result of a `collect_errors()` — empty when nothing failed."""
 
     groups: dict[tuple, ErrorGroup] = field(default_factory=dict)
 
@@ -79,7 +81,7 @@ class CollectedErrors:
 
     @property
     def total(self) -> int:
-        """Quantos registros de erro entraram, antes da agregação."""
+        """How many error records came in, before aggregation."""
         return sum(g.count for g in self.groups.values())
 
     def add(self, record: logging.LogRecord) -> None:
@@ -93,7 +95,7 @@ class CollectedErrors:
 
         try:
             message = record.getMessage()
-        except Exception:  # noqa: BLE001 - args malformados não podem quebrar a coleta
+        except Exception:  # noqa: BLE001 - malformed args must not break collection
             message = str(record.msg)
 
         self.groups[signature] = ErrorGroup(
@@ -104,7 +106,7 @@ class CollectedErrors:
         )
 
     def summary(self) -> str:
-        """Corpo legível para a notificação: um bloco por grupo, com contagem."""
+        """Readable body for the notification: one block per group, with a count."""
         lines: list[str] = []
         for group in list(self.groups.values())[:MAX_GROUPS_IN_SUMMARY]:
             header = group.label
@@ -113,21 +115,20 @@ class CollectedErrors:
             lines.append(header)
             lines.append(f"  {group.first_message}")
             if group.count > 1:
-                lines.append(f"  (+{group.count - 1} iguais)")
+                lines.append(f"  (+{group.count - 1} identical)")
 
         remaining = len(self.groups) - MAX_GROUPS_IN_SUMMARY
         if remaining > 0:
-            lines.append(f"(+{remaining} outro(s) tipo(s) de erro)")
+            lines.append(f"(+{remaining} other error type(s))")
 
         return "\n".join(lines)
 
     def as_records(self) -> list[dict]:
-        """Os grupos em forma estruturada, para gravar em `scrape_run.details`.
+        """The groups in structured form, to write into `scrape_run.details`.
 
-        Diferente de `summary()`, que é texto renderizado para caber nos 1024
-        caracteres do Pushover: aqui vão **todos** os grupos, em campos
-        separados, para que uma consulta posterior possa agregar por tipo de
-        erro em vez de fazer parsing de string.
+        Unlike `summary()`, which is text rendered to fit Pushover's 1024
+        characters: **all** groups go here, in separate fields, so that a later
+        query can aggregate by error type instead of parsing strings.
         """
         return [
             {
@@ -156,15 +157,15 @@ class _CollectingHandler(logging.Handler):
             self._collected.add(record)
 
     def handleError(self, record: logging.LogRecord) -> None:
-        # Silencia: um erro dentro do coletor de erros não deve escrever no
-        # stderr nem propagar para quem estava só logando.
+        # Stay silent: an error inside the error collector must not write to
+        # stderr nor propagate to whoever was merely logging.
         pass
 
 
 @contextmanager
 def collect_errors() -> Iterator[CollectedErrors]:
-    """Agrega tudo que `app.*` logar em nível ERROR+ nesta thread, enquanto durar
-    o bloco.
+    """Aggregate everything `app.*` logs at ERROR+ on this thread, for as long
+    as the block lasts.
 
         with collect_errors() as collected:
             ...
@@ -175,14 +176,15 @@ def collect_errors() -> Iterator[CollectedErrors]:
     handler = _CollectingHandler(collected, threading.get_ident())
     app_logger = logging.getLogger(APP_LOGGER_NAME)
 
-    # Um handler só recebe registros que chegaram a ser criados, e `log.error()`
-    # não cria nada se o nível efetivo do logger estiver acima de ERROR. Sem
-    # esta garantia, subir o nível de log (`basicConfig(level=CRITICAL)`, um
-    # `LOG_LEVEL` no ambiente) emudeceria o sistema de notificação inteiro, em
-    # silêncio — o pior modo de falha possível para justamente este subsistema.
-    # Abaixamos o nível só durante a execução e restauramos depois. O efeito
-    # colateral é os erros passarem a aparecer também no stdout, que é desejado.
-    nivel_original = app_logger.level
+    # A handler only receives records that actually got created, and
+    # `log.error()` creates nothing if the logger's effective level is above
+    # ERROR. Without this guarantee, raising the log level
+    # (`basicConfig(level=CRITICAL)`, a `LOG_LEVEL` in the environment) would
+    # silently mute the entire notification system — the worst possible failure
+    # mode for this subsystem of all things. We lower the level only for the
+    # duration of the run and restore it afterwards. The side effect is that
+    # errors also start showing up on stdout, which is desirable.
+    original_level = app_logger.level
     if app_logger.getEffectiveLevel() > logging.ERROR:
         app_logger.setLevel(logging.ERROR)
 
@@ -191,4 +193,4 @@ def collect_errors() -> Iterator[CollectedErrors]:
         yield collected
     finally:
         app_logger.removeHandler(handler)
-        app_logger.setLevel(nivel_original)
+        app_logger.setLevel(original_level)

@@ -1,5 +1,5 @@
-"""Funções de parsing/normalização — regras extraídas de docs/schemas.md e
-docs/notas-de-campo.md. Nada aqui acessa rede ou banco.
+"""Parsing/normalization functions — rules extracted from docs/schemas.md and
+docs/field-notes.md. Nothing here touches the network or the database.
 """
 
 from __future__ import annotations
@@ -11,8 +11,8 @@ import urllib.parse
 BROADCAST_SPLIT = re.compile(r"\s+e\s+|,\s*")
 BROADCAST_JUNK = {"<>", "", "-"}
 PAREN_RE = re.compile(r"^(?P<platform>.*?)\s*\((?P<qualifier>.+)\)\s*$")
-# "ESPN 4" -> "ESPN", "SporTV 2" -> "SporTV" — redução de família documentada
-# em docs/schemas.md#casamento-entre-agenda-e-catálogos.
+# "ESPN 4" -> "ESPN", "SporTV 2" -> "SporTV" — family reduction documented in
+# docs/schemas.md#casamento-entre-agenda-e-catálogos.
 TRAILING_VARIANT_RE = re.compile(r"^(?P<base>.+?)\s+\d+\+?$")
 
 
@@ -22,7 +22,7 @@ def strip_accents(text: str) -> str:
 
 
 def normalize_key(text: str) -> str:
-    """trim + casefold + sem acento — chave de casamento/índice."""
+    """trim + casefold + accent-free — the matching/index key."""
     return strip_accents(text).strip().casefold()
 
 
@@ -31,11 +31,11 @@ def normalize_team_name(name: str) -> str:
 
 
 def split_broadcast(raw: str) -> list[str]:
-    """'ESPN 4 e Disney+' -> ['ESPN 4', 'Disney+']. Filtra lixo conhecido (`"<>"`).
+    """'ESPN 4 e Disney+' -> ['ESPN 4', 'Disney+']. Filters known junk (`"<>"`).
 
-    Só quebra em `" e "`/`", "` fora de parênteses — valores como
-    `"Globo (menos BA, PE, NE)"` têm vírgula dentro do qualificador, e um
-    split ingênuo os estilhaça em tokens que não casam com nada.
+    It only splits on `" e "`/`", "` outside parentheses — values such as
+    `"Globo (menos BA, PE, NE)"` carry a comma inside the qualifier, and a naive
+    split shatters them into tokens that match nothing.
     """
     if not raw:
         return []
@@ -71,7 +71,7 @@ def split_broadcast(raw: str) -> list[str]:
 
 
 def split_platform_qualifier(token: str) -> tuple[str, str | None]:
-    """'YouTube (CazéTV)' -> ('YouTube', 'CazéTV'). Sem parênteses -> (token, None)."""
+    """'YouTube (CazéTV)' -> ('YouTube', 'CazéTV'). No parentheses -> (token, None)."""
     m = PAREN_RE.match(token)
     if not m:
         return token.strip(), None
@@ -79,13 +79,13 @@ def split_platform_qualifier(token: str) -> tuple[str, str | None]:
 
 
 def family_fallback(platform_key: str) -> str | None:
-    """'espn 4' -> 'espn'. Usado só quando o match exato/alias falhou."""
+    """'espn 4' -> 'espn'. Used only when the exact/alias match failed."""
     m = TRAILING_VARIANT_RE.match(platform_key)
     return m.group("base").strip() if m else None
 
 
 def parse_odds(raw: list[str] | None) -> tuple[float | None, float | None, float | None]:
-    """['1.66','4.00','4.50'] -> floats; sentinela de ausência é a string '-'."""
+    """['1.66','4.00','4.50'] -> floats; the absence sentinel is the string '-'."""
     values = (raw or []) + ["-", "-", "-"]
     out: list[float | None] = []
     for v in values[:3]:
@@ -103,7 +103,7 @@ def parse_time(time_raw: str) -> tuple[int, int]:
 
 
 def extract_youtube_id(url: str | None) -> str | None:
-    """Extrai `v=` por query-parsing — alguns valores trazem `&pp=` colado."""
+    """Extracts `v=` by query-parsing — some values carry `&pp=` glued on."""
     if not url:
         return None
     qs = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)

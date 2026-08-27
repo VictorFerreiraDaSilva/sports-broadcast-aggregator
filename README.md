@@ -57,9 +57,11 @@ cp .env.example .env    # ajuste a senha e o FUTNATV_CONTACT_INFO
 docker compose up -d --build
 ```
 
-No primeiro boot (`RUN_ON_STARTUP=true`, default) o container já roda uma coleta completa de
-todas as fontes registradas; depois disso cada fonte segue sua própria cadência (ver
-`games_schedule`/`catalog_schedule` de cada uma).
+A cada boot (`RUN_ON_STARTUP=true`, default) o container roda uma coleta completa de todas as
+fontes registradas — catálogo primeiro, para quem tiver, depois os jogos — antes de iniciar o
+agendamento; daí em diante cada fonte segue sua própria cadência (ver
+`games_schedule`/`catalog_schedule` de cada uma). Vale também para `docker compose restart`: o
+upsert é idempotente pela chave natural do jogo, então recoletar não duplica nada.
 
 As tabelas são criadas sozinhas: o container roda `alembic upgrade head` antes de iniciar o
 scheduler. Para rodar um job manualmente (fora do agendamento):
@@ -73,7 +75,7 @@ docker compose run --rm aggregator catalog             # sincroniza o catálogo 
 ## Notificações de erro
 
 O agregador roda desatendido, então toda falha que valha a pena saber vira um push no
-[Pushover](https://pushover.net) (ver [ADR 0007](docs/adr/0007-notificacao-de-erros-por-logging.md)).
+[Pushover](https://pushover.net) (ver [ADR 0007](docs/adr/0007-error-notification-via-logging.md)).
 
 ```bash
 # em .env — crie a aplicação em https://pushover.net/apps/build

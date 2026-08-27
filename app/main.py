@@ -1,8 +1,8 @@
-"""CLI para rodar um job manualmente, fora do agendamento — útil para testar.
+"""CLI to run a job by hand, outside the schedule — handy for testing.
 
-    python -m app.main games                 # coleta jogos de todas as fontes
-    python -m app.main games --source futnatv # só de uma fonte
-    python -m app.main catalog                # sincroniza o catálogo de toda fonte que tiver um
+    python -m app.main games                  # collect games from every source
+    python -m app.main games --source futnatv # from one source only
+    python -m app.main catalog                # sync the catalog of every source that has one
     python -m app.main catalog --source futnatv
 """
 
@@ -29,7 +29,7 @@ def main() -> None:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     ap.add_argument("job", choices=["games", "catalog"])
-    ap.add_argument("--source", help="código da fonte (default: todas as registradas)")
+    ap.add_argument("--source", help="source code (default: every registered one)")
     args = ap.parse_args()
 
     sources = [get_source(args.source)] if args.source else SOURCES

@@ -15,8 +15,8 @@ site). Não há documentação oficial; tudo aqui é comportamento observado e p
 |---|---|
 | [docs/api-reference.md](docs/api-reference.md) | Todos os endpoints, parâmetros, códigos de erro, CORS, limites |
 | [docs/schemas.md](docs/schemas.md) | Estrutura de cada campo de cada payload, com domínios de valores reais |
-| [docs/notas-de-campo.md](docs/notas-de-campo.md) | Armadilhas, dados sujos e decisões de parsing |
-| [docs/legal-e-etiqueta.md](docs/legal-e-etiqueta.md) | robots.txt, Content-Signals e etiqueta de coleta |
+| [docs/field-notes.md](docs/field-notes.md) | Armadilhas, dados sujos e decisões de parsing |
+| [docs/legal-and-etiquette.md](docs/legal-and-etiquette.md) | robots.txt, Content-Signals e etiqueta de coleta |
 | [examples/futnatv.py](examples/futnatv.py) | Cliente Python de referência (stdlib apenas) |
 | [samples/](samples/README.md) | Respostas reais capturadas, para teste offline |
 
@@ -100,7 +100,7 @@ Config namespaced em [config.py](config.py) (`FUTNATV_BASE_URL`,
 `FUTNATV_REQUEST_DELAY_SECONDS`, `FUTNATV_CONTACT_INFO`, ...). Cadência de coleta declarada em
 `FutnatvSource.games_schedule`/`catalog_schedule` — 6:00, 12:00, 18:00 e 23:40 (horário de
 Brasília) para jogos, 5:55 para o catálogo (canais/competições mudam em escala de semanas, ver
-[docs/legal-e-etiqueta.md](docs/legal-e-etiqueta.md)).
+[docs/legal-and-etiquette.md](docs/legal-and-etiquette.md)).
 
 ### Exemplos de análise
 
@@ -120,7 +120,7 @@ from game where source_code = 'futnatv' group by 1 order by 2 desc;
 ### Limitações herdadas da API (não do código)
 
 - Times sem ID estável: reconciliação por nome normalizado tem ruído se o site reescrever um nome
-  entre capturas (ver "o que não existe" em [docs/notas-de-campo.md](docs/notas-de-campo.md)).
+  entre capturas (ver "o que não existe" em [docs/field-notes.md](docs/field-notes.md)).
 - `broadcast`/`competition` são texto livre digitado à mão — o casamento com `channel`/`competition`
   é best-effort (exato → alias → redução de família tipo `ESPN 4`→`ESPN`) e pode não fechar para
   nomes muito novos ainda não catalogados.

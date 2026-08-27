@@ -1,13 +1,13 @@
-"""O contrato `Source` — o único ponto de acoplamento entre o core e uma fonte.
+"""The `Source` contract — the only coupling point between the core and a source.
 
-Ver docs/adr/0001 (registro explícito), 0003 (esporte canônico), 0004
-(`sync_catalog` opcional), 0005 (core vs app/sources/<fonte>/) e 0006 (schema
-enxuto + `source_data` opaco).
+See docs/adr/0001 (explicit registry), 0003 (canonical sport), 0004 (optional
+`sync_catalog`), 0005 (core vs app/sources/<source>/) and 0006 (lean schema +
+opaque `source_data`).
 
-`fetch_games` é a única obrigação. `sync_catalog` é uma capacidade opcional —
-o orquestrador detecta se uma fonte a implementa com
-`hasattr(source, "sync_catalog")` (ver app/core/registry.py) em vez de exigir
-um método no-op de toda fonte só por uniformidade.
+`fetch_games` is the only obligation. `sync_catalog` is an optional capability —
+the orchestrator detects whether a source implements it with
+`hasattr(source, "sync_catalog")` (see app/core/registry.py) instead of forcing
+every source to carry a no-op method just for uniformity.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session
 
 @dataclass(frozen=True)
 class CronSchedule:
-    """Um horário cron, no fuso de `app.core.config.BRT`."""
+    """A cron time, in the `app.core.config.BRT` timezone."""
 
     hour: str
     minute: str = "0"
@@ -29,11 +29,11 @@ class CronSchedule:
 
 @dataclass(frozen=True)
 class NormalizedBroadcast:
-    """Um token de transmissão já casado (ou não) contra o catálogo da fonte.
+    """A broadcast token already matched (or not) against the source's catalog.
 
-    O core não sabe *como* uma fonte tokeniza/casa `broadcast_raw` — isso é
-    peculiaridade de fonte (ADR 0003/0006). A fonte entrega o resultado já
-    resolvido; o core só grava.
+    The core does not know *how* a source tokenizes/matches `broadcast_raw` —
+    that is a source peculiarity (ADR 0003/0006). The source hands over the
+    resolved result; the core only writes it.
     """
 
     raw_token: str
@@ -45,14 +45,14 @@ class NormalizedBroadcast:
 
 @dataclass(frozen=True)
 class NormalizedGame:
-    """Um jogo normalizado para o esporte canônico, pronto para o core gravar.
+    """A game normalized to the canonical sport, ready for the core to write.
 
-    `competition_id`/`home_team_id`/`away_team_id`/`channel_id` (dentro de
-    `broadcasts`) já vêm resolvidos pela fonte contra seus próprios catálogos
-    escopados (ADR 0003) — o core nunca faz esse casamento.
+    `competition_id`/`home_team_id`/`away_team_id`/`channel_id` (inside
+    `broadcasts`) already come resolved by the source against its own scoped
+    catalogs (ADR 0003) — the core never does that matching.
 
-    `source_data` carrega tudo que é peculiar da fonte e não tem coluna
-    própria no core (odds, ícones, payload cru, ...) — ADR 0006.
+    `source_data` carries everything peculiar to the source that has no column
+    of its own in the core (odds, icons, raw payload, ...) — ADR 0006.
     """
 
     sport_code: str
@@ -72,26 +72,25 @@ class NormalizedGame:
 
 
 class Source(Protocol):
-    """O que toda fonte precisa implementar para entrar no registro (ADR 0001)."""
+    """What every source must implement to enter the registry (ADR 0001)."""
 
     code: str
     name: str
     games_schedule: Sequence[CronSchedule]
 
     def fetch_games(self, session: Session, dates: Sequence[dt.date]) -> list[NormalizedGame]:
-        """Busca e normaliza os jogos de `dates`.
+        """Fetch and normalize the games for `dates`.
 
-        Pode ler/escrever nas dimensões escopadas por esta fonte (`team`,
-        `channel`, `competition`) através de `session` para resolver os IDs
-        que devolve em `NormalizedGame` — mas não grava em `game`/
-        `game_broadcast` nem faz commit: isso é responsabilidade genérica do
-        core (app/core/ingest.py).
+        May read/write the dimensions scoped to this source (`team`, `channel`,
+        `competition`) through `session` to resolve the IDs it returns in
+        `NormalizedGame` — but does not write to `game`/`game_broadcast` nor
+        commit: that is the core's generic responsibility (app/core/ingest.py).
         """
         ...
 
-    # Capacidade opcional (ADR 0004) — implementada só por fontes com um
-    # catálogo real para sincronizar. Não faz parte do Protocol formalmente
-    # porque nem toda fonte a tem; ver app/core/registry.py para a detecção.
+    # Optional capability (ADR 0004) — implemented only by sources with a real
+    # catalog to sync. Not formally part of the Protocol because not every
+    # source has it; see app/core/registry.py for the detection.
     #
     # def sync_catalog(self, session: Session) -> dict: ...
     # catalog_schedule: Sequence[CronSchedule]

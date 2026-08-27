@@ -7,8 +7,8 @@ São trechos curtos — o suficiente para exercitar o parser, não para substitu
 |---|---|---|
 | `api-futebol-2026-08-21.json` | `/api/futebol?data=2026-08-21` | 5 jogos escolhidos para cobrir **todos** os campos opcionais de uma vez |
 | `api-nhl-2026-08-22.json` | `/api/nhl?data=2026-08-22` | as duas maiores armadilhas, num arquivo só |
-| `canais-trecho.json` | `/canais.json` | 6 dos 61 canais, com a forma completa preservada |
-| `competicoes-trecho.json` | `/competicoes-futebol.json` | 4 das 224 competições, incluindo o caso de `image` emoji |
+| `channels-excerpt.json` | `/canais.json` | 6 dos 61 canais, com a forma completa preservada |
+| `competitions-excerpt.json` | `/competicoes-futebol.json` | 4 das 224 competições, incluindo o caso de `image` emoji |
 
 ## O que cada fixture exercita
 
@@ -30,7 +30,7 @@ O `availableDates` foi mantido íntegro (15 datas) para testar o recorte de ±7 
 
 Se o seu parser passar nesses dois arquivos, ele sobrevive à API real.
 
-**`competicoes-trecho.json`** — inclui `"Mundial de Seleções"` com `image: "🌍"` (emoji cru, não
+**`competitions-excerpt.json`** — inclui `"Mundial de Seleções"` com `image: "🌍"` (emoji cru, não
 nome de arquivo) ao lado de três entradas com `.png`. É o caso que quebra quem monta a URL do
 logo por concatenação cega.
 

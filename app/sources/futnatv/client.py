@@ -1,10 +1,9 @@
-"""Cliente HTTP para futnatv.net.
+"""HTTP client for futnatv.net.
 
-Sem CORS no servidor (ver docs/notas-de-campo.md #1) — isso não afeta um
-cliente server-side como este, mas é por isso que a extração precisa rodar
-aqui e não em JS de página. Serializa as requisições com uma pausa mínima
-entre elas e usa um User-Agent identificável, conforme
-docs/legal-e-etiqueta.md.
+No CORS on the server (see docs/field-notes.md #1) — that does not affect a
+server-side client like this one, but it is why extraction has to run here and
+not in page JS. It serializes requests with a minimum pause between them and
+uses an identifiable User-Agent, per docs/legal-and-etiquette.md.
 """
 
 from __future__ import annotations
@@ -27,7 +26,7 @@ log = logging.getLogger(__name__)
 
 
 class FutnatvError(RuntimeError):
-    """A API respondeu 200 com a chave `erro` (ou um 4xx/5xx com corpo JSON)."""
+    """The API answered 200 with the `erro` key (or a 4xx/5xx with a JSON body)."""
 
 
 class Futnatv:
@@ -59,17 +58,17 @@ class Futnatv:
             data = resp.json()
         except ValueError as exc:
             resp.raise_for_status()
-            raise FutnatvError(f"resposta não-JSON de {path}") from exc
+            raise FutnatvError(f"non-JSON response from {path}") from exc
 
-        # Erros vêm com HTTP 400/404 e corpo {"erro": "..."} , ou (raramente)
-        # um 200 com a mesma chave — ver docs/api-reference.md.
+        # Errors come as HTTP 400/404 with a {"erro": "..."} body, or (rarely)
+        # a 200 with the same key — see docs/api-reference.md.
         if isinstance(data, dict) and "erro" in data:
             raise FutnatvError(data["erro"])
         resp.raise_for_status()
         return data
 
     def day(self, sport: str, date_str: str) -> dict:
-        """Payload cru de `/api/{sport}?data=YYYY-MM-DD`."""
+        """Raw payload of `/api/{sport}?data=YYYY-MM-DD`."""
         return self._get(f"/api/{sport}?data={date_str}")
 
     def channels_catalog(self) -> dict:

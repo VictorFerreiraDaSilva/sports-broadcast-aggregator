@@ -1,9 +1,9 @@
-"""Fonte fake, sem rede — só para provar mecanicamente que registrar uma
-segunda fonte não toca app/core/ (ADR 0001/0005). Dados hardcoded.
+"""Fake source, no network — purely to prove mechanically that registering a
+second source does not touch app/core/ (ADR 0001/0005). Hardcoded data.
 
-Não implementa `sync_catalog` de propósito: prova o outro lado do contrato
-(ADR 0004) — uma fonte sem catálogo real simplesmente não expõe o método, e o
-orquestrador não agenda o job de catálogo para ela.
+It deliberately does not implement `sync_catalog`: that proves the other side of
+the contract (ADR 0004) — a source with no real catalog simply does not expose
+the method, and the orchestrator schedules no catalog job for it.
 """
 
 from __future__ import annotations
@@ -20,19 +20,19 @@ _HARDCODED_GAMES = (
     {
         "sport": "futebol",
         "time": "16h00",
-        "competition": "Liga Exemplo",
-        "round": "1ª Rodada",
-        "home": "Time Alfa",
-        "away": "Time Beta",
-        "broadcast": "Canal Exemplo",
+        "competition": "Example League",
+        "round": "Round 1",
+        "home": "Team Alpha",
+        "away": "Team Beta",
+        "broadcast": "Example Channel",
     },
     {
         "sport": "basquete",
         "time": "20h30",
-        "competition": "Copa Exemplo",
+        "competition": "Example Cup",
         "round": "",
-        "home": "Clube Gama",
-        "away": "Clube Delta",
+        "home": "Gamma Club",
+        "away": "Delta Club",
         "broadcast": "",
     },
 )
@@ -40,7 +40,7 @@ _HARDCODED_GAMES = (
 
 class ExampleSource:
     code = "_example"
-    name = "Fonte de exemplo (fake)"
+    name = "Example source (fake)"
 
     games_schedule = (CronSchedule(hour="7", minute="0"),)
 
@@ -60,7 +60,7 @@ class ExampleSource:
                             raw_token=broadcast_raw,
                             platform_text=broadcast_raw,
                             qualifier_text=None,
-                            channel_id=None,  # sem catálogo — fonte não implementa sync_catalog
+                            channel_id=None,  # no catalog — the source does not implement sync_catalog
                             match_method="none",
                         )
                     )
@@ -80,7 +80,7 @@ class ExampleSource:
                         away_team_id=teams.resolve(raw["away"]),
                         broadcast_raw=broadcast_raw,
                         broadcasts=broadcasts,
-                        source_data={"note": "dados fake, sem rede — app/sources/_example/"},
+                        source_data={"note": "fake data, no network — app/sources/_example/"},
                     )
                 )
         return games

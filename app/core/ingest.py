@@ -1,9 +1,9 @@
-"""Upsert genérico de `NormalizedGame` em `game`/`game_broadcast`, e resolução
-de `team` — a única dimensão cuja lógica de casamento (nome normalizado) é
-genérica o bastante para viver no core em vez de em cada fonte (ADR 0003:
-`channel`/`competition` continuam sendo casamento específico de fonte).
+"""Generic upsert of `NormalizedGame` into `game`/`game_broadcast`, plus `team`
+resolution — the only dimension whose matching logic (normalized name) is
+generic enough to live in the core instead of in each source (ADR 0003:
+`channel`/`competition` remain source-specific matching).
 
-Nada aqui conhece o formato de uma fonte específica — só o shape de
+Nothing here knows the format of a specific source — only the shape of
 `NormalizedGame` (app/core/source.py).
 """
 
@@ -26,26 +26,26 @@ _NATURAL_KEY_COLS = {
 
 
 def target_dates(today: dt.date | None = None) -> list[dt.date]:
-    """Hoje (BRT) + DAYS_AHEAD dias — o pedido é "hoje + 3 dias"."""
+    """Today (BRT) + DAYS_AHEAD days — the requirement is "today + 3 days"."""
     base = today or dt.datetime.now(BRT).date()
     return [base + dt.timedelta(days=i) for i in range(DAYS_AHEAD + 1)]
 
 
 def _normalize_name(name: str) -> str:
-    """trim + casefold + sem acento — chave de casamento de time.
+    """trim + casefold + accent-free — the team matching key.
 
-    Normalização propositalmente mínima e independente da de qualquer fonte
-    (ex.: app/sources/futnatv/normalize.py) — o core não depende de código de
-    fonte (ADR 0005).
+    Deliberately minimal normalization, independent of any source's own (e.g.
+    app/sources/futnatv/normalize.py) — the core does not depend on source
+    code (ADR 0005).
     """
     decomposed = unicodedata.normalize("NFKD", name)
     return "".join(c for c in decomposed if not unicodedata.combining(c)).strip().casefold()
 
 
 class TeamResolver:
-    """Cache em memória de normalized_name -> Team.id para uma execução, escopado
-    por `source_code` (cada instância serve uma única fonte, então o cache não
-    precisa da fonte na chave)."""
+    """In-memory cache of normalized_name -> Team.id for one run, scoped by
+    `source_code` (each instance serves a single source, so the cache does not
+    need the source in its key)."""
 
     def __init__(self, session: Session, source_code: str):
         self.session = session
@@ -75,8 +75,9 @@ class TeamResolver:
 
 
 def _replace_broadcasts(session: Session, game_id: int, game: NormalizedGame) -> None:
-    """Recalcula do zero a cada captura — a fonte já entregou os tokens
-    resolvidos (NormalizedGame.broadcasts); o core só grava."""
+    """Recomputed from scratch on every capture — the source already handed
+    over the resolved tokens (NormalizedGame.broadcasts); the core only
+    writes them."""
     session.execute(delete(GameBroadcast).where(GameBroadcast.game_id == game_id))
     for position, b in enumerate(game.broadcasts):
         session.add(
@@ -93,9 +94,9 @@ def _replace_broadcasts(session: Session, game_id: int, game: NormalizedGame) ->
 
 
 def upsert_games(session: Session, source_code: str, games: list[NormalizedGame]) -> int:
-    """Upsert genérico de `game` + `game_broadcast` a partir de jogos já
-    normalizados. Não faz commit — quem chama decide a granularidade
-    (ver app/core/jobs.py)."""
+    """Generic upsert of `game` + `game_broadcast` from already-normalized
+    games. Does not commit — the caller decides the granularity
+    (see app/core/jobs.py)."""
     for game in games:
         values = dict(
             source_code=source_code,

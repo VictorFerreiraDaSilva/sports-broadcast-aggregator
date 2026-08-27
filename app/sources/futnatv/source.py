@@ -1,10 +1,9 @@
-"""Adapter futnatv: implementa o protocol `Source` (app/core/source.py) sobre
-a API de futnatv.net.
+"""futnatv adapter: implements the `Source` protocol (app/core/source.py) over
+the futnatv.net API.
 
-Uma chamada = um dia (não existe endpoint de intervalo — ver
-docs/notas-de-campo.md #4), então uma execução completa é
-`len(FUTNATV_SPORTS) * len(dates)` requisições sequenciais, espaçadas pelo
-cliente HTTP.
+One call = one day (there is no range endpoint — see docs/field-notes.md #4),
+so a full run is `len(FUTNATV_SPORTS) * len(dates)` sequential requests, spaced
+out by the HTTP client.
 """
 
 from __future__ import annotations
@@ -31,14 +30,15 @@ from app.sources.futnatv.normalize import (
 
 log = logging.getLogger(__name__)
 
-# O endpoint consultado já usa o vocabulário canônico de esporte (ADR 0003) —
-# mapeamento identidade, mas explícito: todo adapter declara essa tradução.
+# The endpoint we query already uses the canonical sport vocabulary (ADR 0003)
+# — an identity mapping, but an explicit one: every adapter declares this
+# translation.
 _SPORT_MAP = {sport: sport for sport in FUTNATV_SPORTS}
 
 
 def _brief(raw: dict, limit: int = 200) -> str:
-    """Identificação curta de um jogo cru, para a mensagem de erro — o payload
-    inteiro estouraria o corpo de 1024 caracteres do Pushover."""
+    """Short identification of a raw game, for the error message — the whole
+    payload would blow past Pushover's 1024-character body."""
     text = repr(raw)
     return text if len(text) <= limit else text[: limit - 1] + "…"
 
@@ -47,10 +47,10 @@ class FutnatvSource:
     code = FUTNATV_SOURCE_CODE
     name = FUTNATV_SOURCE_NAME
 
-    # Horários dos jogos (pedido do projeto, horário de Brasília): 6:00,
-    # 12:00, 18:00 e 23:40. Catálogo uma vez por dia, antes da primeira
-    # coleta — canais/competições mudam em escala de semanas
-    # (docs/legal-e-etiqueta.md), sincronizar 4x/dia seria desnecessário.
+    # Collection times (project requirement, Brasília time): 6:00, 12:00,
+    # 18:00 and 23:40. Catalog once a day, before the first collection — channels and
+    # competitions change on a scale of weeks (docs/legal-and-etiquette.md), so
+    # syncing 4x a day would be pointless.
     games_schedule = (
         CronSchedule(hour="6,12,18", minute="0"),
         CronSchedule(hour="23", minute="40"),
@@ -76,18 +76,19 @@ class FutnatvSource:
                     payload = self._client.day(sport, day_key)
                 except FutnatvError as exc:
                     log.error(
-                        "erro ao buscar %s %s: %s: %s",
+                        "error fetching %s %s: %s: %s",
                         sport, day_key, type(exc).__name__, exc,
                     )
                     continue
 
                 for day_obj in payload.get("schedule", []):
                     for raw in day_obj.get("games", []):
-                        # Um jogo malformado (campo que sumiu, horário num
-                        # formato novo) não pode derrubar os outros ~500 da
-                        # execução — descarta só ele. O `log.error` é o que faz
-                        # o descarte chegar até a notificação (ADR 0007): sem
-                        # ele, isto seria perda de dado silenciosa.
+                        # A malformed game (a field that vanished, a time in a
+                        # new format) must not take down the other ~500 of the
+                        # run — drop just that one. The `log.error` is what
+                        # carries the drop through to the notification
+                        # (ADR 0007): without it, this would be silent data
+                        # loss.
                         try:
                             games.append(
                                 self._normalize_game(
@@ -101,7 +102,7 @@ class FutnatvSource:
                             )
                         except Exception as exc:  # noqa: BLE001
                             log.error(
-                                "jogo descartado (%s %s): %s: %s | payload=%s",
+                                "game dropped (%s %s): %s: %s | payload=%s",
                                 sport, day_key, type(exc).__name__, exc, _brief(raw),
                             )
         return games
@@ -150,8 +151,8 @@ class FutnatvSource:
             broadcast_raw=broadcast_raw,
             broadcasts=broadcasts,
             source_data={
-                # `sport` do payload mente para nfl/nhl (docs/notas-de-campo.md
-                # #2) — guardado à parte, nunca usado como sport_code.
+                # The payload's `sport` lies for nfl/nhl (docs/field-notes.md
+                # #2) — kept aside, never used as sport_code.
                 "payload_sport": raw.get("sport", sport_code),
                 "odds_home": odds_home,
                 "odds_draw": odds_draw,

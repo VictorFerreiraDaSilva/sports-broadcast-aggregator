@@ -1,9 +1,10 @@
-"""Fixtures de teste.
+"""Test fixtures.
 
-Os testes que tocam banco (tests/test_source_contract.py::test_example_source_round_trip)
-precisam de `DATABASE_URL` apontando para um Postgres descartável — o schema é
-recriado do zero (`Base.metadata.drop_all` + `create_all`) a cada sessão de
-teste. Não aponte para um banco com dados que importam.
+The tests that touch the database
+(tests/test_source_contract.py::test_example_source_round_trip) need
+`DATABASE_URL` pointing at a disposable Postgres — the schema is recreated from
+scratch (`Base.metadata.drop_all` + `create_all`) on every test session. Do not
+point it at a database holding data you care about.
 
     DATABASE_URL=postgresql+psycopg://fut:fut@localhost:55432/fut pytest
 """
@@ -25,8 +26,8 @@ def db_engine():
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
 
-    # create_all não roda o seed de dados da migration (só o DDL) — seed as
-    # duas dimensões estáticas (sport, source) uma vez por sessão de teste.
+    # create_all does not run the migration's data seed (only the DDL) — seed
+    # the two static dimensions (sport, source) once per test session.
     Session = sessionmaker(bind=engine, expire_on_commit=False, future=True)
     session = Session()
     session.add_all(
@@ -57,8 +58,8 @@ def db_session(db_engine):
     session = Session()
     yield session
     session.rollback()
-    # limpa as tabelas transacionais entre testes; `sport`/`source` são
-    # dimensões estáticas seedadas uma vez em db_engine e ficam intactas.
+    # clear the transactional tables between tests; `sport`/`source` are static
+    # dimensions seeded once in db_engine and are left intact.
     for model in (ScrapeRun, CatalogMeta, Game, Team, Competition, Channel):
         session.query(model).delete()
     session.commit()

@@ -1,14 +1,14 @@
 #!/bin/sh
 set -e
 
-# Antes do alembic: com o banco fora do ar o alembic morreria aqui, o container
-# morreria junto e o `restart: unless-stopped` faria o crash loop mudo que o
-# ADR 0007 descreve. Este passo mantém o container de pé, notifica uma vez e
-# espera o banco voltar.
-echo "esperando o banco..."
+# Before alembic: with the database down, alembic would die here, the container
+# would die with it and `restart: unless-stopped` would produce the mute crash
+# loop ADR 0007 describes. This step keeps the container up, notifies once and
+# waits for the database to come back.
+echo "waiting for the database..."
 python -m app.core.wait_for_db
 
-echo "aplicando migrações (alembic upgrade head)..."
+echo "applying migrations (alembic upgrade head)..."
 alembic upgrade head
 
 case "$1" in

@@ -1,4 +1,4 @@
-"""schema inicial
+"""initial schema
 
 Revision ID: 0001_schema_inicial
 Revises:
@@ -145,10 +145,10 @@ def upgrade() -> None:
     op.create_index('ix_game_broadcast_channel_id', 'game_broadcast', ['channel_id'], unique=False)
     # ### end Alembic commands ###
 
-    # Seed: o vocabulário canônico de esporte compartilhado entre fontes
-    # (ADR 0003) — pequeno e fechado, não muda em runtime. `source` NÃO é
-    # seedada aqui: é derivada do registro em app/core/registry.py a cada
-    # startup (ADR 0001), não digitada à mão numa migration.
+    # Seed: the canonical sport vocabulary shared across sources (ADR 0003) —
+    # small and closed, it does not change at runtime. `source` is NOT seeded
+    # here: it is derived from the registry in app/core/registry.py on every
+    # startup (ADR 0001), not hand-typed into a migration.
     sport_table = sa.table(
         "sport",
         sa.column("code", sa.String),

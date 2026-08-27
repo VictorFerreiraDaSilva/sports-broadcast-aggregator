@@ -1,10 +1,10 @@
-"""Testes do sistema de notificação de erros (ADR 0007).
+"""Tests for the error notification system (ADR 0007).
 
-Nada aqui toca rede nem banco: `requests.post` é sempre substituído e o
-notificador é chamado direto. O objetivo é fixar as três garantias em que o
-resto do código confia — o coletor pega o que deve e só o que deve, a
-notificação nunca propaga exceção, e a tabela de severidade não muda por
-acidente.
+Nothing here touches the network or the database: `requests.post` is always
+replaced and the notifier is called directly. The goal is to pin down the three
+guarantees the rest of the code relies on — the collector picks up what it
+should and only what it should, the notification never propagates an exception,
+and the severity table does not change by accident.
 """
 
 from __future__ import annotations
@@ -19,18 +19,18 @@ from app.core.errors import APP_LOGGER_NAME, collect_errors
 
 
 # --------------------------------------------------------------------------
-# Coletor (app/core/errors.py)
+# Collector (app/core/errors.py)
 # --------------------------------------------------------------------------
 
 
-def test_agrupa_erros_pela_assinatura_e_nao_pela_mensagem_formatada():
-    """As 16 falhas de "erro ao buscar %s %s" viram um grupo, não 16 linhas."""
+def test_groups_errors_by_signature_not_by_formatted_message():
+    """The 16 failures of "error fetching %s %s" become one group, not 16 lines."""
     log = logging.getLogger(f"{APP_LOGGER_NAME}.sources.fake")
 
     with collect_errors() as collected:
         for sport in ("futebol", "basquete"):
             for day in ("2026-08-27", "2026-08-28"):
-                log.error("erro ao buscar %s %s: %s", sport, day, "HTTP 503")
+                log.error("error fetching %s %s: %s", sport, day, "HTTP 503")
 
     assert collected
     assert collected.total == 4
@@ -38,293 +38,293 @@ def test_agrupa_erros_pela_assinatura_e_nao_pela_mensagem_formatada():
 
     (group,) = collected.groups.values()
     assert group.count == 4
-    assert group.first_message == "erro ao buscar futebol 2026-08-27: HTTP 503"
+    assert group.first_message == "error fetching futebol 2026-08-27: HTTP 503"
 
     summary = collected.summary()
-    # sem exc_info, o cabeçalho é o módulo sem o prefixo "app."
+    # without exc_info, the header is the module minus the "app." prefix
     assert "sources.fake ×4" in summary
-    assert "(+3 iguais)" in summary
+    assert "(+3 identical)" in summary
 
 
-def test_separa_grupos_por_tipo_de_excecao():
+def test_separates_groups_by_exception_type():
     log = logging.getLogger(f"{APP_LOGGER_NAME}.sources.fake")
 
     with collect_errors() as collected:
         try:
-            raise KeyError("time")
+            raise KeyError("team")
         except KeyError:
-            log.exception("jogo descartado")
+            log.exception("game dropped")
         try:
-            raise ValueError("horário")
+            raise ValueError("time")
         except ValueError:
-            log.exception("jogo descartado")
+            log.exception("game dropped")
 
     assert len(collected.groups) == 2
     assert {g.exc_type for g in collected.groups.values()} == {"KeyError", "ValueError"}
 
 
-def test_ignora_niveis_abaixo_de_error():
+def test_ignores_levels_below_error():
     log = logging.getLogger(f"{APP_LOGGER_NAME}.sources.fake")
 
     with collect_errors() as collected:
-        log.info("coletando")
-        log.warning("canal não casou")
+        log.info("collecting")
+        log.warning("channel did not match")
 
     assert not collected
     assert collected.total == 0
 
 
-def test_ignora_loggers_fora_da_arvore_da_aplicacao():
-    """Um log.error de urllib3 ou do SQLAlchemy não é falha de coleta."""
+def test_ignores_loggers_outside_the_application_tree():
+    """A log.error from urllib3 or SQLAlchemy is not a collection failure."""
     with collect_errors() as collected:
         logging.getLogger("urllib3.connectionpool").error("Retrying after connection broken")
-        logging.getLogger("sqlalchemy.engine").error("algo genérico")
+        logging.getLogger("sqlalchemy.engine").error("something generic")
 
     assert not collected
 
 
-def test_ignora_erros_de_outra_thread():
-    """O APScheduler roda jobs num pool — os erros de um job não podem vazar
-    para a notificação de outro."""
+def test_ignores_errors_from_another_thread():
+    """APScheduler runs jobs in a pool — one job's errors must not leak into
+    another's notification."""
     log = logging.getLogger(f"{APP_LOGGER_NAME}.sources.fake")
     started = threading.Event()
 
-    def outra_coleta():
+    def other_collection():
         started.wait(timeout=5)
-        log.error("erro de outro job")
+        log.error("error from another job")
 
-    thread = threading.Thread(target=outra_coleta)
+    thread = threading.Thread(target=other_collection)
 
     with collect_errors() as collected:
         thread.start()
         started.set()
         thread.join(timeout=5)
-        log.error("erro deste job")
+        log.error("error from this job")
 
     assert collected.total == 1
     (group,) = collected.groups.values()
-    assert group.first_message == "erro deste job"
+    assert group.first_message == "error from this job"
 
 
-def test_handler_e_removido_ao_sair_do_bloco():
+def test_handler_is_removed_on_leaving_the_block():
     app_logger = logging.getLogger(APP_LOGGER_NAME)
-    antes = len(app_logger.handlers)
+    before = len(app_logger.handlers)
 
     with collect_errors():
-        assert len(app_logger.handlers) == antes + 1
+        assert len(app_logger.handlers) == before + 1
 
-    assert len(app_logger.handlers) == antes
+    assert len(app_logger.handlers) == before
 
 
-def test_summary_resume_quando_ha_grupos_demais():
+def test_summary_condenses_when_there_are_too_many_groups():
     log = logging.getLogger(f"{APP_LOGGER_NAME}.sources.fake")
 
     with collect_errors() as collected:
         for i in range(8):
-            log.error("erro tipo %d ocorrido" % i)  # noqa: UP031 - template distinto de propósito
+            log.error("error of type %d occurred" % i)  # noqa: UP031 - distinct template on purpose
 
     assert len(collected.groups) == 8
-    assert "(+3 outro(s) tipo(s) de erro)" in collected.summary()
+    assert "(+3 other error type(s))" in collected.summary()
 
 
 # --------------------------------------------------------------------------
-# Notificador (app/core/notify.py)
+# Notifier (app/core/notify.py)
 # --------------------------------------------------------------------------
 
 
 @pytest.fixture()
-def pushover_configurado(monkeypatch):
-    """Credenciais falsas + captura do POST, sem tocar a rede."""
-    monkeypatch.setattr(notify_mod, "PUSHOVER_TOKEN", "token-de-teste")
-    monkeypatch.setattr(notify_mod, "PUSHOVER_USER_KEY", "user-de-teste")
+def pushover_configured(monkeypatch):
+    """Fake credentials + capture of the POST, without touching the network."""
+    monkeypatch.setattr(notify_mod, "PUSHOVER_TOKEN", "test-token")
+    monkeypatch.setattr(notify_mod, "PUSHOVER_USER_KEY", "test-user")
     monkeypatch.setattr(notify_mod, "PUSHOVER_APP_NAME", "fut-test")
 
-    enviados = []
+    sent = []
 
     class FakeResponse:
         status_code = 200
         text = '{"status":1}'
 
     def fake_post(url, data=None, timeout=None):
-        enviados.append(data)
+        sent.append(data)
         return FakeResponse()
 
     monkeypatch.setattr(notify_mod.requests, "post", fake_post)
-    return enviados
+    return sent
 
 
-def test_sem_credencial_vira_no_op(monkeypatch):
+def test_without_credentials_it_is_a_no_op(monkeypatch):
     monkeypatch.setattr(notify_mod, "PUSHOVER_TOKEN", "")
     monkeypatch.setattr(notify_mod, "PUSHOVER_USER_KEY", "")
 
     def explode(*args, **kwargs):
-        raise AssertionError("não deveria tocar a rede sem credencial")
+        raise AssertionError("should not touch the network without credentials")
 
     monkeypatch.setattr(notify_mod.requests, "post", explode)
 
-    assert notify_mod.notify("título", "corpo") is False
+    assert notify_mod.notify("title", "body") is False
 
 
-def test_envia_com_prefixo_e_prioridade(pushover_configurado):
-    assert notify_mod.notify("futnatv/games falhou", "corpo", priority=1) is True
+def test_sends_with_prefix_and_priority(pushover_configured):
+    assert notify_mod.notify("futnatv/games failed", "body", priority=1) is True
 
-    (payload,) = pushover_configurado
-    assert payload["title"] == "fut-test · futnatv/games falhou"
-    assert payload["message"] == "corpo"
+    (payload,) = pushover_configured
+    assert payload["title"] == "fut-test · futnatv/games failed"
+    assert payload["message"] == "body"
     assert payload["priority"] == 1
 
 
-def test_trunca_nos_limites_da_api(pushover_configurado):
+def test_truncates_at_the_api_limits(pushover_configured):
     notify_mod.notify("t" * 500, "m" * 5000)
 
-    (payload,) = pushover_configurado
+    (payload,) = pushover_configured
     assert len(payload["title"]) == 250
     assert len(payload["message"]) == 1024
     assert payload["message"].endswith("…")
 
 
-def test_falha_de_envio_nunca_propaga(monkeypatch):
-    monkeypatch.setattr(notify_mod, "PUSHOVER_TOKEN", "token-de-teste")
-    monkeypatch.setattr(notify_mod, "PUSHOVER_USER_KEY", "user-de-teste")
+def test_send_failure_never_propagates(monkeypatch):
+    monkeypatch.setattr(notify_mod, "PUSHOVER_TOKEN", "test-token")
+    monkeypatch.setattr(notify_mod, "PUSHOVER_USER_KEY", "test-user")
 
     def explode(*args, **kwargs):
-        raise ConnectionError("rede fora")
+        raise ConnectionError("network down")
 
     monkeypatch.setattr(notify_mod.requests, "post", explode)
 
-    assert notify_mod.notify("título", "corpo") is False
+    assert notify_mod.notify("title", "body") is False
 
 
-def test_resposta_nao_200_devolve_false(monkeypatch, pushover_configurado):
-    class Recusa:
+def test_non_200_response_returns_false(monkeypatch, pushover_configured):
+    class Refusal:
         status_code = 400
         text = '{"errors":["application token is invalid"]}'
 
-    monkeypatch.setattr(notify_mod.requests, "post", lambda *a, **k: Recusa())
+    monkeypatch.setattr(notify_mod.requests, "post", lambda *a, **k: Refusal())
 
-    assert notify_mod.notify("título", "corpo") is False
+    assert notify_mod.notify("title", "body") is False
 
 
 # --------------------------------------------------------------------------
-# Tabela de severidade (app/core/jobs.py::_notify_result)
+# Severity table (app/core/jobs.py::_notify_result)
 # --------------------------------------------------------------------------
 
 
 class FakeSource:
-    code = "fonte-teste"
-    name = "Fonte de Teste"
+    code = "test-source"
+    name = "Test Source"
 
 
 @pytest.fixture()
-def notificacoes(monkeypatch):
-    """Captura o que `jobs` mandaria notificar, sem passar pelo Pushover."""
+def notifications(monkeypatch):
+    """Capture what `jobs` would notify, without going through Pushover."""
     from app.core import jobs
 
-    capturadas = []
+    captured = []
     monkeypatch.setattr(
         jobs,
         "notify",
-        lambda title, message, priority=0: capturadas.append((title, message, priority)),
+        lambda title, message, priority=0: captured.append((title, message, priority)),
     )
-    return jobs, capturadas
+    return jobs, captured
 
 
-def _collected(*mensagens):
+def _collected(*messages):
     log = logging.getLogger(f"{APP_LOGGER_NAME}.sources.fake")
     with collect_errors() as collected:
-        for msg in mensagens:
+        for msg in messages:
             log.error(msg)
     return collected
 
 
-def test_execucao_limpa_nao_notifica(notificacoes):
-    jobs, capturadas = notificacoes
+def test_clean_run_does_not_notify(notifications):
+    jobs, captured = notifications
     jobs._notify_result(
         "games", FakeSource(), "success", {"games_count": 142}, None, _collected(), 7
     )
-    assert capturadas == []
+    assert captured == []
 
 
-def test_job_que_falhou_notifica_em_prioridade_normal(notificacoes):
-    jobs, capturadas = notificacoes
+def test_failed_job_notifies_at_normal_priority(notifications):
+    jobs, captured = notifications
     jobs._notify_result(
-        "games", FakeSource(), "error", {}, "ConnectionError: rede fora", _collected(), 7
+        "games", FakeSource(), "error", {}, "ConnectionError: network down", _collected(), 7
     )
 
-    (title, message, priority) = capturadas[0]
-    assert title == "fonte-teste/games falhou"
+    (title, message, priority) = captured[0]
+    assert title == "test-source/games failed"
     assert priority == notify_mod.PRIORITY_ERROR
-    assert "ConnectionError: rede fora" in message
+    assert "ConnectionError: network down" in message
     assert "run #7" in message
 
 
-def test_erro_parcial_notifica_como_degradado(notificacoes):
-    jobs, capturadas = notificacoes
+def test_partial_error_notifies_as_degraded(notifications):
+    jobs, captured = notifications
     jobs._notify_result(
         "games",
         FakeSource(),
         "success",
         {"games_count": 142},
         None,
-        _collected("falhou a", "falhou b"),
+        _collected("a failed", "b failed"),
         7,
     )
 
-    (title, message, priority) = capturadas[0]
-    assert title == "fonte-teste/games degradado"
+    (title, message, priority) = captured[0]
+    assert title == "test-source/games degraded"
     assert priority == notify_mod.PRIORITY_WARNING
-    assert "2 erros engolidos" in message
-    assert "142 jogo(s) gravado(s)" in message
+    assert "2 errors swallowed" in message
+    assert "142 game(s) written" in message
 
 
-def test_coleta_vazia_sem_erro_notifica(notificacoes):
-    jobs, capturadas = notificacoes
+def test_empty_collection_without_error_notifies(notifications):
+    jobs, captured = notifications
     jobs._notify_result("games", FakeSource(), "success", {"games_count": 0}, None, _collected(), 7)
 
-    (title, _message, priority) = capturadas[0]
-    assert title == "fonte-teste/games sem jogos"
+    (title, _message, priority) = captured[0]
+    assert title == "test-source/games no games"
     assert priority == notify_mod.PRIORITY_WARNING
 
 
-def test_catalogo_vazio_nao_dispara_a_regra_de_zero_jogos(notificacoes):
-    """A regra de "sem jogos" é do job de games; um catálogo que só pulou
-    (versão inalterada) é sucesso legítimo."""
-    jobs, capturadas = notificacoes
+def test_empty_catalog_does_not_trigger_the_zero_games_rule(notifications):
+    """The "no games" rule belongs to the games job; a catalog that merely
+    skipped (unchanged version) is a legitimate success."""
+    jobs, captured = notifications
     jobs._notify_result(
         "catalog", FakeSource(), "success", {"skipped": True}, None, _collected(), 7
     )
-    assert capturadas == []
+    assert captured == []
 
 
-def test_no_maximo_uma_notificacao_por_execucao(notificacoes):
-    jobs, capturadas = notificacoes
+def test_at_most_one_notification_per_run(notifications):
+    jobs, captured = notifications
     jobs._notify_result(
         "games",
         FakeSource(),
         "error",
         {"games_count": 0},
         "boom",
-        _collected("parcial a", "parcial b"),
+        _collected("partial a", "partial b"),
         7,
     )
-    assert len(capturadas) == 1
+    assert len(captured) == 1
 
 
 # --------------------------------------------------------------------------
-# Espera pelo banco (app/core/wait_for_db.py)
+# Waiting for the database (app/core/wait_for_db.py)
 # --------------------------------------------------------------------------
 
 
 class FakeEngine:
-    """Falha `falhas` vezes antes de conectar."""
+    """Fails `failures` times before connecting."""
 
-    def __init__(self, falhas: int):
-        self.falhas = falhas
-        self.tentativas = 0
+    def __init__(self, failures: int):
+        self.failures = failures
+        self.attempts = 0
 
     def connect(self):
-        self.tentativas += 1
-        if self.tentativas <= self.falhas:
+        self.attempts += 1
+        if self.attempts <= self.failures:
             raise OSError("connection refused")
         return self
 
@@ -343,100 +343,100 @@ def wait_mod(monkeypatch):
     from app.core import wait_for_db as mod
 
     monkeypatch.setattr(mod.time, "sleep", lambda _s: None)
-    capturadas = []
+    captured = []
     monkeypatch.setattr(
-        mod, "notify", lambda title, message, priority=0: capturadas.append((title, priority))
+        mod, "notify", lambda title, message, priority=0: captured.append((title, priority))
     )
-    return mod, capturadas
+    return mod, captured
 
 
-def test_banco_disponivel_de_primeira_nao_notifica(wait_mod):
-    mod, capturadas = wait_mod
-    mod.wait_for_db(FakeEngine(falhas=0))
-    assert capturadas == []
+def test_database_available_right_away_does_not_notify(wait_mod):
+    mod, captured = wait_mod
+    mod.wait_for_db(FakeEngine(failures=0))
+    assert captured == []
 
 
-def test_falha_curta_nao_notifica(wait_mod, monkeypatch):
-    """Um restart rotineiro do Postgres não deve virar push."""
-    mod, capturadas = wait_mod
+def test_short_failure_does_not_notify(wait_mod, monkeypatch):
+    """A routine Postgres restart must not become a push."""
+    mod, captured = wait_mod
     monkeypatch.setattr(mod, "DB_WAIT_NOTIFY_AFTER_SECONDS", 3600)
-    mod.wait_for_db(FakeEngine(falhas=3))
-    assert capturadas == []
+    mod.wait_for_db(FakeEngine(failures=3))
+    assert captured == []
 
 
-def test_falha_prolongada_notifica_uma_vez_e_avisa_da_recuperacao(wait_mod, monkeypatch):
-    mod, capturadas = wait_mod
+def test_prolonged_failure_notifies_once_and_reports_recovery(wait_mod, monkeypatch):
+    mod, captured = wait_mod
     monkeypatch.setattr(mod, "DB_WAIT_NOTIFY_AFTER_SECONDS", 0)
 
-    engine = FakeEngine(falhas=5)
+    engine = FakeEngine(failures=5)
     mod.wait_for_db(engine)
 
-    assert engine.tentativas == 6
-    assert [t for t, _p in capturadas] == ["banco inacessível", "banco recuperado"]
-    assert capturadas[0][1] == notify_mod.PRIORITY_CRITICAL
-    assert capturadas[1][1] == notify_mod.PRIORITY_WARNING
+    assert engine.attempts == 6
+    assert [t for t, _p in captured] == ["database unreachable", "database recovered"]
+    assert captured[0][1] == notify_mod.PRIORITY_CRITICAL
+    assert captured[1][1] == notify_mod.PRIORITY_WARNING
 
 
-def test_teto_de_espera_levanta(wait_mod, monkeypatch):
-    mod, _capturadas = wait_mod
+def test_wait_ceiling_raises(wait_mod, monkeypatch):
+    mod, _captured = wait_mod
     monkeypatch.setattr(mod, "DB_WAIT_MAX_SECONDS", 0.0001)
     monkeypatch.setattr(mod, "DB_WAIT_NOTIFY_AFTER_SECONDS", 3600)
 
-    with pytest.raises(RuntimeError, match="banco inacessível"):
-        mod.wait_for_db(FakeEngine(falhas=99))
+    with pytest.raises(RuntimeError, match="database unreachable"):
+        mod.wait_for_db(FakeEngine(failures=99))
 
 
 # --------------------------------------------------------------------------
-# Persistência do estado degradado (app/core/jobs.py::_run + scrape_run)
+# Persistence of the degraded state (app/core/jobs.py::_run + scrape_run)
 # --------------------------------------------------------------------------
 
 
-def test_as_records_leva_todos_os_grupos_estruturados():
-    """`summary()` é texto cortado para caber no Pushover; `as_records()` é o
-    que vai para o banco e não corta nada."""
+def test_as_records_carries_every_group_structured():
+    """`summary()` is text trimmed to fit Pushover; `as_records()` is what goes
+    to the database and trims nothing."""
     log = logging.getLogger(f"{APP_LOGGER_NAME}.sources.fake")
 
     with collect_errors() as collected:
         for i in range(8):
-            log.error("erro tipo %d ocorrido" % i)  # noqa: UP031
-        log.error("erro tipo %d ocorrido" % 0)  # noqa: UP031 - repete o primeiro
+            log.error("error of type %d occurred" % i)  # noqa: UP031
+        log.error("error of type %d occurred" % 0)  # noqa: UP031 - repeats the first
 
-    assert "(+3 outro(s) tipo(s) de erro)" in collected.summary()
+    assert "(+3 other error type(s))" in collected.summary()
 
-    registros = collected.as_records()
-    assert len(registros) == 8, "as_records não corta em MAX_GROUPS_IN_SUMMARY"
-    assert sum(r["count"] for r in registros) == collected.total == 9
-    assert registros[0] == {
+    records = collected.as_records()
+    assert len(records) == 8, "as_records must not trim at MAX_GROUPS_IN_SUMMARY"
+    assert sum(r["count"] for r in records) == collected.total == 9
+    assert records[0] == {
         "label": "sources.fake",
         "logger": "app.sources.fake",
-        "template": "erro tipo 0 ocorrido",
+        "template": "error of type 0 occurred",
         "exc_type": None,
         "count": 2,
-        "example": "erro tipo 0 ocorrido",
+        "example": "error of type 0 occurred",
     }
 
 
-def test_as_records_distingue_tipos_de_erro_do_mesmo_modulo():
-    """`label` cai no nome do módulo quando não há exc_info, então dois erros
-    diferentes da mesma fonte colidiriam numa agregação. `template` é o campo
-    que os separa."""
+def test_as_records_distinguishes_error_types_from_the_same_module():
+    """`label` falls back to the module name when there is no exc_info, so two
+    different errors from the same source would collide in an aggregation.
+    `template` is the field that separates them."""
     log = logging.getLogger(f"{APP_LOGGER_NAME}.sources.fake")
 
     with collect_errors() as collected:
-        log.error("erro ao buscar %s %s: %s", "futebol", "2026-08-27", "HTTP 503")
-        log.error("jogo descartado (%s %s): %s", "volei", "2026-08-27", "KeyError")
+        log.error("error fetching %s %s: %s", "futebol", "2026-08-27", "HTTP 503")
+        log.error("game dropped (%s %s): %s", "volei", "2026-08-27", "KeyError")
 
-    registros = collected.as_records()
-    assert len({r["label"] for r in registros}) == 1, "label sozinho não distingue"
-    assert {r["template"] for r in registros} == {
-        "erro ao buscar %s %s: %s",
-        "jogo descartado (%s %s): %s",
+    records = collected.as_records()
+    assert len({r["label"] for r in records}) == 1, "label alone does not distinguish"
+    assert {r["template"] for r in records} == {
+        "error fetching %s %s: %s",
+        "game dropped (%s %s): %s",
     }
 
 
-def _example_source_que_loga(mensagens, explode=None):
-    """ExampleSource com `fetch_games` instrumentado para logar erros (e,
-    opcionalmente, estourar) antes de devolver os jogos hardcoded."""
+def _example_source_that_logs(messages, explode=None):
+    """ExampleSource with `fetch_games` instrumented to log errors (and,
+    optionally, to blow up) before returning the hardcoded games."""
     from app.sources._example.source import ExampleSource
 
     source = ExampleSource()
@@ -444,8 +444,8 @@ def _example_source_que_loga(mensagens, explode=None):
     log = logging.getLogger("app.sources._example.source")
 
     def fetch_games(session, dates):
-        for sport, dia in mensagens:
-            log.error("erro ao buscar %s %s: %s", sport, dia, "HTTP 503")
+        for sport, day in messages:
+            log.error("error fetching %s %s: %s", sport, day, "HTTP 503")
         if explode is not None:
             raise explode
         return original(session, dates)
@@ -455,26 +455,26 @@ def _example_source_que_loga(mensagens, explode=None):
 
 
 @pytest.fixture()
-def jobs_sem_push(monkeypatch):
-    """`jobs` real contra o banco real, só com o Pushover desligado."""
+def jobs_without_push(monkeypatch):
+    """The real `jobs` against the real database, only with Pushover turned off."""
     from app.core import jobs
 
     monkeypatch.setattr(jobs, "notify", lambda *a, **k: None)
     return jobs
 
 
-def _ultimo_run(db_session):
+def _last_run(db_session):
     from app.core.models import ScrapeRun
 
     return db_session.query(ScrapeRun).order_by(ScrapeRun.id.desc()).first()
 
 
-def test_execucao_limpa_grava_success_sem_ruido(db_session, jobs_sem_push):
-    resultado = jobs_sem_push.run_games_scrape(_example_source_que_loga([]))
+def test_clean_run_writes_success_without_noise(db_session, jobs_without_push):
+    result = jobs_without_push.run_games_scrape(_example_source_that_logs([]))
 
-    assert resultado["status"] == "success"
+    assert result["status"] == "success"
 
-    run = _ultimo_run(db_session)
+    run = _last_run(db_session)
     assert run.status == "success"
     assert run.error_message is None
     assert run.details["games_count"] > 0
@@ -482,79 +482,79 @@ def test_execucao_limpa_grava_success_sem_ruido(db_session, jobs_sem_push):
     assert "error_groups" not in run.details
 
 
-def test_erro_engolido_grava_degraded_com_os_grupos(db_session, jobs_sem_push):
-    """O ponto do item: uma execução que só notificava não podia continuar
-    sendo contada como sucesso limpo por quem consultasse `scrape_run`."""
-    source = _example_source_que_loga(
+def test_swallowed_error_writes_degraded_with_the_groups(db_session, jobs_without_push):
+    """The point of the item: a run that only notified could not go on being
+    counted as a clean success by whoever queried `scrape_run`."""
+    source = _example_source_that_logs(
         [("futebol", "2026-08-27"), ("futebol", "2026-08-28"), ("basquete", "2026-08-27")]
     )
-    resultado = jobs_sem_push.run_games_scrape(source)
+    result = jobs_without_push.run_games_scrape(source)
 
-    assert resultado["status"] == "degraded"
+    assert result["status"] == "degraded"
 
-    run = _ultimo_run(db_session)
+    run = _last_run(db_session)
     assert run.status == "degraded"
-    # a falha fatal continua sendo a única dona de error_message
+    # the fatal failure remains the sole owner of error_message
     assert run.error_message is None
-    # gravou o que deu: degradado não é o mesmo que perdido
+    # it wrote what it could: degraded is not the same as lost
     assert run.details["games_count"] > 0
     assert run.details["errors_collected"] == 3
 
-    (grupo,) = run.details["error_groups"]
-    assert grupo["count"] == 3
-    assert grupo["label"] == "sources._example.source"
-    assert grupo["logger"] == "app.sources._example.source"
-    assert grupo["example"] == "erro ao buscar futebol 2026-08-27: HTTP 503"
+    (group,) = run.details["error_groups"]
+    assert group["count"] == 3
+    assert group["label"] == "sources._example.source"
+    assert group["logger"] == "app.sources._example.source"
+    assert group["example"] == "error fetching futebol 2026-08-27: HTTP 503"
 
 
-def test_falha_fatal_continua_error_mas_preserva_os_parciais(db_session, jobs_sem_push):
-    """Um run que engoliu erros e depois morreu é `error` — a falha fatal é a
-    mais grave —, mas os parciais deixam de se perder."""
-    source = _example_source_que_loga(
+def test_fatal_failure_stays_error_but_preserves_the_partials(db_session, jobs_without_push):
+    """A run that swallowed errors and then died is `error` — the fatal failure
+    is the more severe one — but the partials stop being lost."""
+    source = _example_source_that_logs(
         [("futebol", "2026-08-27"), ("volei", "2026-08-27")],
-        explode=ConnectionError("rede fora"),
+        explode=ConnectionError("network down"),
     )
-    resultado = jobs_sem_push.run_games_scrape(source)
+    result = jobs_without_push.run_games_scrape(source)
 
-    assert resultado["status"] == "error"
+    assert result["status"] == "error"
 
-    run = _ultimo_run(db_session)
+    run = _last_run(db_session)
     assert run.status == "error"
-    assert run.error_message == "ConnectionError: rede fora"
+    assert run.error_message == "ConnectionError: network down"
     assert run.details["errors_collected"] == 2
     assert len(run.details["error_groups"]) == 1
 
 
-def test_coleta_vazia_sem_erro_continua_success(db_session, jobs_sem_push):
-    """"Sem jogos" notifica, mas não é degradação: nenhum erro aconteceu. O
-    sinal fica em games_count, não num quarto valor de status."""
+def test_empty_collection_without_error_stays_success(db_session, jobs_without_push):
+    """"No games" notifies, but is not a degradation: no error happened. The
+    signal lives in games_count, not in a fourth status value."""
     from app.sources._example.source import ExampleSource
 
     source = ExampleSource()
     source.fetch_games = lambda session, dates: []
 
-    resultado = jobs_sem_push.run_games_scrape(source)
-    assert resultado["status"] == "success"
+    result = jobs_without_push.run_games_scrape(source)
+    assert result["status"] == "success"
 
-    run = _ultimo_run(db_session)
+    run = _last_run(db_session)
     assert run.status == "success"
     assert run.details["games_count"] == 0
     assert "errors_collected" not in run.details
 
 
-def test_coletor_nao_emudece_com_nivel_de_log_alto():
-    """Um `basicConfig(level=CRITICAL)` não pode desligar a notificação em
-    silêncio: `log.error` nem chega a criar o registro se o nível efetivo
-    estiver acima de ERROR."""
+def test_collector_is_not_muted_by_a_high_log_level():
+    """A `basicConfig(level=CRITICAL)` must not silently turn the notification
+    off: `log.error` never even creates the record if the effective level is
+    above ERROR."""
     app_logger = logging.getLogger(APP_LOGGER_NAME)
     log = logging.getLogger(f"{APP_LOGGER_NAME}.sources.fake")
-    nivel_original = app_logger.level
+    original_level = app_logger.level
     app_logger.setLevel(logging.CRITICAL)
     try:
         with collect_errors() as collected:
-            log.error("erro que seria engolido pelo nível de log")
+            log.error("error that would be swallowed by the log level")
         assert collected.total == 1
-        # e o nível é restaurado ao sair
+        # and the level is restored on exit
         assert app_logger.level == logging.CRITICAL
     finally:
-        app_logger.setLevel(nivel_original)
+        app_logger.setLevel(original_level)

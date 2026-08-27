@@ -1,24 +1,25 @@
-"""Wrappers genéricos que abrem sessão, chamam uma fonte, gravam o resultado
-em `scrape_run` e notificam se algo deu errado — usados pelo scheduler e pelo
-CLI manual (app/main.py).
+"""Generic wrappers that open a session, call a source, write the result to
+`scrape_run` and notify if something went wrong — used by the scheduler and by
+the manual CLI (app/main.py).
 
-Erros por data/requisição dentro de `fetch_games` continuam sendo
-responsabilidade da própria fonte (logar e pular). O que mudou (ADR 0007) é que
-esse `log.error` deixou de ser invisível: `collect_errors()` o captura, e uma
-execução que "deu certo" mas engoliu falhas sai daqui como *degradada* —
-`scrape_run.status="degraded"`, com os erros agregados em
-`scrape_run.details`, e push de aviso. Uma falha que a fonte não conseguiu
-engolir (erro de rede fatal, exceção de programação, ...) propaga, marca o run
-como "error" e notifica.
+Per-date/per-request errors inside `fetch_games` remain the source's own
+responsibility (log and skip). What changed (ADR 0007) is that this `log.error`
+is no longer invisible: `collect_errors()` captures it, and a run that
+"succeeded" but swallowed failures leaves here as *degraded* —
+`scrape_run.status="degraded"`, with the errors aggregated into
+`scrape_run.details`, plus a warning push. A failure the source could not
+swallow (fatal network error, programming exception, ...) propagates, marks the
+run as "error" and notifies.
 
-`status` tem portanto três valores: `success` (limpo), `degraded` (gravou o que
-deu, engoliu erros) e `error` (perdeu a execução inteira). Um run `error` que
-também engoliu erros parciais continua `error` — a falha fatal é a mais grave —
-mas leva os parciais em `details` do mesmo jeito, que antes se perdiam.
+`status` therefore has three values: `success` (clean), `degraded` (wrote what
+it could, swallowed errors) and `error` (lost the entire run). An `error` run
+that also swallowed partial errors stays `error` — the fatal failure is the
+more severe one — but carries the partials in `details` all the same, where
+they used to be lost.
 
-No máximo uma notificação por execução — ver `_notify_result`. Sem isso, a API
-da fonte fora do ar geraria uma dezena de pushes por execução, justamente no
-dia em que ler o celular importa.
+At most one notification per run — see `_notify_result`. Without that, the
+source's API being down would generate a dozen pushes per run, on precisely the
+day reading the phone matters.
 """
 
 from __future__ import annotations
@@ -45,49 +46,49 @@ def _notify_result(
     collected: CollectedErrors,
     run_id: int | None,
 ) -> None:
-    """Decide se esta execução merece um push, e com qual severidade (ADR 0007).
+    """Decide whether this run deserves a push, and at which severity (ADR 0007).
 
-    Três situações notificam, em ordem de gravidade:
+    Three situations notify, in order of severity:
 
-    - **falhou**: a execução inteira foi perdida. Prioridade normal — a próxima
-      execução agendada pode muito bem resolver sozinha.
-    - **degradado**: gravou alguma coisa, mas engoliu erros pelo caminho.
-    - **sem jogos**: nem erro houve, e ainda assim não veio nenhum jogo. É o
-      modo de falha mais silencioso que existe aqui (a fonte responde 200 e o
-      parser aceita, mas não acha nada) e o único que nenhuma exceção denuncia.
+    - **failed**: the entire run was lost. Normal priority — the next scheduled
+      run may well fix it on its own.
+    - **degraded**: wrote something, but swallowed errors along the way.
+    - **no games**: not a single error, and still no game came through. It is
+      the quietest failure mode here (the source answers 200 and the parser
+      accepts it, but finds nothing) and the only one no exception reveals.
 
-    Execução limpa não notifica — um push por coleta bem-sucedida, 4x por dia
-    por fonte, treinaria qualquer um a ignorar os pushes.
+    A clean run does not notify — one push per successful collection, 4x a day
+    per source, would train anyone to ignore the pushes.
     """
     job_label = f"{source.code}/{job_type}"
-    run_label = f"run #{run_id}" if run_id is not None else "run não registrado"
+    run_label = f"run #{run_id}" if run_id is not None else "run not recorded"
 
     if status == "error":
-        parts = [error_message or "erro sem mensagem"]
+        parts = [error_message or "error with no message"]
         if collected:
-            parts.append(f"\nAntes de falhar:\n{collected.summary()}")
+            parts.append(f"\nBefore failing:\n{collected.summary()}")
         parts.append(f"\n{run_label}")
-        notify(f"{job_label} falhou", "\n".join(parts), priority=PRIORITY_ERROR)
+        notify(f"{job_label} failed", "\n".join(parts), priority=PRIORITY_ERROR)
         return
 
     if collected:
-        plural = "erros" if collected.total > 1 else "erro"
+        plural = "errors" if collected.total > 1 else "error"
         parts = [
-            f"{collected.total} {plural} engolidos durante a execução.",
+            f"{collected.total} {plural} swallowed during the run.",
             "",
             collected.summary(),
             "",
             f"{_details_label(job_type, details)} · {run_label}",
         ]
-        notify(f"{job_label} degradado", "\n".join(parts), priority=PRIORITY_WARNING)
+        notify(f"{job_label} degraded", "\n".join(parts), priority=PRIORITY_WARNING)
         return
 
     if job_type == "games" and details.get("games_count") == 0:
         notify(
-            f"{job_label} sem jogos",
-            "A execução terminou sem erro algum e não gravou nenhum jogo.\n"
-            "Provável mudança de contrato da fonte: ela respondeu, o parser "
-            "aceitou, e não sobrou nada.\n\n"
+            f"{job_label} no games",
+            "The run finished without a single error and wrote no games.\n"
+            "Likely a contract change at the source: it answered, the parser "
+            "accepted it, and nothing was left.\n\n"
             f"{run_label}",
             priority=PRIORITY_WARNING,
         )
@@ -95,8 +96,8 @@ def _notify_result(
 
 def _details_label(job_type: str, details: dict) -> str:
     if job_type == "games":
-        return f"{details.get('games_count', 0)} jogo(s) gravado(s)"
-    return "catálogo sincronizado"
+        return f"{details.get('games_count', 0)} game(s) written"
+    return "catalog synced"
 
 
 def _run(job_type: str, source: Source, fn) -> dict:
@@ -109,23 +110,23 @@ def _run(job_type: str, source: Source, fn) -> dict:
     collected = CollectedErrors()
 
     try:
-        # Só `fn` fica sob o coletor: o `log.exception` abaixo é a falha total,
-        # já reportada por `error_message`, e não deve entrar na agregação de
-        # erros parciais.
+        # Only `fn` sits under the collector: the `log.exception` below is the
+        # total failure, already reported through `error_message`, and must not
+        # enter the aggregation of partial errors.
         with collect_errors() as collected:
             details = fn(session)
         session.commit()
-    except Exception as exc:  # noqa: BLE001 - precisa registrar qualquer falha
+    except Exception as exc:  # noqa: BLE001 - must record any failure whatsoever
         session.rollback()
         status = "error"
         error_message = f"{type(exc).__name__}: {exc}"
-        log.exception("job %s (source=%s) falhou", job_type, source.code)
+        log.exception("job %s (source=%s) failed", job_type, source.code)
     finally:
-        # O estado "degradado" (gravou, mas engoliu erros) precisa existir no
-        # banco, não só no push: uma execução que só notificou não pode ser
-        # contada como sucesso limpo por quem consultar `scrape_run` depois.
-        # `error_message` continua reservado à falha fatal — os erros
-        # engolidos vão para `details`, estruturados.
+        # The "degraded" state (wrote, but swallowed errors) has to exist in
+        # the database, not only in the push: a run that merely notified must
+        # not be counted as a clean success by whoever queries `scrape_run`
+        # later. `error_message` stays reserved for the fatal failure — the
+        # swallowed errors go into `details`, structured.
         if collected:
             details = {
                 **details,
@@ -149,8 +150,9 @@ def _run(job_type: str, source: Source, fn) -> dict:
         run_id = run.id
         session.close()
 
-    # Fora do finally e depois do commit: a notificação nunca pode impedir o
-    # `scrape_run` de ser gravado, e cita o id do run para quem for investigar.
+    # Outside the finally and after the commit: the notification must never
+    # keep `scrape_run` from being written, and it cites the run id for whoever
+    # investigates.
     _notify_result(job_type, source, status, details, error_message, collected, run_id)
 
     return {"status": status, "details": details, "error_message": error_message}
@@ -168,5 +170,5 @@ def run_games_scrape(source: Source, dates: list[dt.date] | None = None) -> dict
 def run_catalog_sync(source: Source) -> dict:
     sync_catalog = getattr(source, "sync_catalog", None)
     if sync_catalog is None:
-        raise TypeError(f"fonte {source.code!r} não implementa sync_catalog (ADR 0004)")
+        raise TypeError(f"source {source.code!r} does not implement sync_catalog (ADR 0004)")
     return _run("catalog", source, lambda session: sync_catalog(session))

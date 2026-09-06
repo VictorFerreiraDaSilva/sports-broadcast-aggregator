@@ -4,7 +4,11 @@ Adding a source means editing the `SOURCES` list below — nothing else in the
 core changes. A late import (inside the module, not at the top of app/core/*)
 would avoid the inverted coupling; since it is the registry itself that has to
 know the sources, the import here is the only place in the core that knows
-"futnatv" and "_example" exist.
+"futnatv" exists.
+
+`app/sources/_example/` is deliberately absent: it is a fixture for the contract
+test (tests/test_source_contract.py), and registering it would schedule a daily
+job writing hardcoded games into the production database.
 """
 
 from __future__ import annotations
@@ -14,12 +18,10 @@ from sqlalchemy.orm import Session
 
 from app.core.models import Source as SourceRow
 from app.core.source import Source
-from app.sources._example.source import ExampleSource
 from app.sources.futnatv.source import FutnatvSource
 
 SOURCES: list[Source] = [
     FutnatvSource(),
-    ExampleSource(),
 ]
 
 

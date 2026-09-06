@@ -17,8 +17,9 @@ import pytest
 @pytest.fixture(scope="session")
 def db_engine():
     from app.core.config import DATABASE_URL
-    from app.core.models import Base, Sport
+    from app.core.models import Base, Source, Sport
     from app.core.registry import seed_sources
+    from app.sources._example.source import ExampleSource
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
 
@@ -41,6 +42,13 @@ def db_engine():
     )
     session.commit()
     seed_sources(session)
+
+    # The example source is not in the registry (it must never run in
+    # production), so seed_sources does not cover it — but the tests that
+    # exercise it write rows with a foreign key to `source`.
+    example = ExampleSource()
+    session.add(Source(code=example.code, name=example.name))
+    session.commit()
     session.close()
 
     yield engine

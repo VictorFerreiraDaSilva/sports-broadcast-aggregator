@@ -1,5 +1,9 @@
-"""Fake source, no network — purely to prove mechanically that registering a
-second source does not touch app/core/ (ADR 0001/0005). Hardcoded data.
+"""Fake source, no network — purely to prove mechanically that a second source
+plugs into app/core/ without touching it (ADR 0001/0005). Hardcoded data.
+
+Deliberately absent from app/core/registry.py: registering it would schedule a
+daily job writing these fake games into the production database. The contract
+test (tests/test_source_contract.py) instantiates it directly instead.
 
 It deliberately does not implement `sync_catalog`: that proves the other side of
 the contract (ADR 0004) — a source with no real catalog simply does not expose

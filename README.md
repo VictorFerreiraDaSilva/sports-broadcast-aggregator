@@ -15,7 +15,8 @@ app/
 │                      coleta de erros + notificação (errors.py, notify.py)
 └── sources/
     ├── futnatv/      → fonte real, sobre a API de futnatv.net
-    └── _example/     → fonte fake (dados hardcoded, sem rede) — prova o contrato
+    └── _example/     → fonte fake (dados hardcoded, sem rede) — prova o contrato,
+                       fora do registro: só os testes a instanciam
 ```
 
 Uma fonte é uma classe que implementa o protocol `Source`
@@ -33,7 +34,8 @@ Uma fonte é uma classe que implementa o protocol `Source`
 
 **Adicionar uma fonte nova não toca `app/core/`** — só soma uma entrada em
 `app/core/registry.py` e uma pasta nova em `app/sources/<fonte>/`. `app/sources/_example/` existe
-só para provar isso mecanicamente.
+só para provar isso mecanicamente — e fica **fora** do registro, porque uma fonte de dados
+inventados agendada em produção gravaria jogos falsos na mesma tabela dos reais.
 
 ### Schema
 
@@ -164,16 +166,17 @@ DATABASE_URL=postgresql+psycopg://fut:fut@localhost:5432/fut_test pytest
 ```
 
 `tests/test_futnatv_normalize.py` é parsing puro, sem banco. `tests/test_source_contract.py`
-exercita o protocol `Source` contra toda fonte registrada — a parte que toca banco roda contra
-`app/sources/_example/` (fake, sem rede) para não depender da API real; o schema é recriado do
-zero no banco de `DATABASE_URL`, então aponte para um Postgres descartável.
+exercita o protocol `Source` contra toda fonte registrada mais a `_example`, que o próprio teste
+instancia — a parte que toca banco roda contra ela (fake, sem rede) para não depender da API
+real; o schema é recriado do zero no banco de `DATABASE_URL`, então aponte para um Postgres
+descartável.
 
 ## Fontes
 
 | Fonte | Papel |
 |---|---|
 | [app/sources/futnatv/](app/sources/futnatv/README.md) | fonte real, sobre a API não-oficial de futnatv.net — documentação de engenharia reversa, samples e cliente de referência ficam lá |
-| `app/sources/_example/` | fonte fake, sem rede, só para provar o contrato `Source` |
+| `app/sources/_example/` | fonte fake, sem rede, só para provar o contrato `Source` — não registrada, não roda em produção |
 
 ## Status
 

@@ -128,6 +128,30 @@ Horários são de Brasília, sem indicação no payload. Combine `Day.key` + `Ga
 em `America/Sao_Paulo` para virar um instante absoluto. Um jogo de liga asiática às `06h00` BRT
 já é "amanhã" no país de origem — o agrupamento por dia é o do site, não o local do evento.
 
+## 16. A agenda escreve nomes de competição que o catálogo não conhece
+
+Medido em 08/09/2026: `Champions League` aparece em **18 jogos, todos com transmissão** — e não
+casa com nada. O catálogo tem `UEFA Champions League`, com `aliases: []`. Não é caso isolado de
+grafia: é o padrão do §10 aplicado a competição, a agenda é digitada à mão e o catálogo só é
+atualizado depois.
+
+**Não conserte com fallback genérico.** A tentação é reduzir por substring, como o `ChannelIndex`
+faz por família (`ESPN 4` → `ESPN`). Aqui isso escolhe errado em silêncio: o catálogo tem **cinco**
+competições contendo "champions league" — `UEFA Champions League`, `AFC Champions League`,
+`AFC Champions League 2`, `UEFA Women's Champions League` e `Pré-Champions League`. `Champions
+League` sozinho é ambíguo entre elas.
+
+O conserto é alias curado, um por um, verificado contra os jogos de verdade — no caso, os times
+(Real Madrid, Barcelona, PSG, Bayern) e o `round` (`Fase de Liga`) confirmam que a agenda usa o
+nome pelado só para a UEFA. Ver `EXTRA_COMPETITION_ALIASES` em
+[../catalogs.py](../catalogs.py). Se um dia a agenda passar a escrever o nome pelado para um jogo
+da AFC, esse alias fica errado — e a fila de curadoria do README **não** pega isso, porque a
+competição vai estar casada, só que com a competição errada.
+
+Consequência: a taxa de `competition_id IS NULL` é sinal de saúde do catálogo e vale monitorar.
+Em 08/09/2026 era 7,1 % no futebol e **100 % em todos os outros esportes** (ver "O que não existe"
+logo abaixo).
+
 ---
 
 ## O que não existe (testado e negativo)

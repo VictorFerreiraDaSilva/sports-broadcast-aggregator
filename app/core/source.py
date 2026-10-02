@@ -53,6 +53,12 @@ class NormalizedGame:
 
     `source_data` carries everything peculiar to the source that has no column
     of its own in the core (odds, icons, raw payload, ...) — ADR 0006.
+
+    `tier_hint`/`gender_hint` are the only optional *contributions*: what the
+    source can say about the competition's level and gender from its own
+    vocabulary, for app/core/classification.py to weigh against the name (ADR 0008). A
+    source that knows nothing leaves them at None and is classified from the
+    name alone — nothing here is required to implement them.
     """
 
     sport_code: str
@@ -69,6 +75,8 @@ class NormalizedGame:
     broadcast_raw: str
     broadcasts: list[NormalizedBroadcast] = field(default_factory=list)
     source_data: dict = field(default_factory=dict)
+    tier_hint: str | None = None  # "youth" | "professional" | None
+    gender_hint: str | None = None  # "women" | "men" | None
 
 
 class Source(Protocol):

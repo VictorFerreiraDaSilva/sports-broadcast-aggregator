@@ -17,6 +17,12 @@ from sqlalchemy.orm import Session
 from app.core.config import BRT
 from app.core.ingest import TeamResolver
 from app.core.source import CronSchedule, NormalizedBroadcast, NormalizedGame
+from app.core.classification import (
+    GENDER_MEN,
+    GENDER_WOMEN,
+    TIER_PROFESSIONAL,
+    TIER_YOUTH,
+)
 from app.sources.futnatv.catalogs import ChannelIndex, CompetitionIndex, sync_all_catalogs
 from app.sources.futnatv.client import Futnatv, FutnatvError
 from app.sources.futnatv.config import FUTNATV_SOURCE_CODE, FUTNATV_SOURCE_NAME, FUTNATV_SPORTS
@@ -34,6 +40,31 @@ log = logging.getLogger(__name__)
 # — an identity mapping, but an explicit one: every adapter declares this
 # translation.
 _SPORT_MAP = {sport: sport for sport in FUTNATV_SPORTS}
+
+# futnatv's competition `category` is one field carrying three collapsed axes:
+# geography (`Brasil`, `Europa`), gender (`Feminino`) and level (`Base`). So a
+# category is positive evidence for at most one axis and silent on the others
+# — `Feminino` holds the Under-20 Women's World Cup, which is women's *and*
+# youth, and the catalog can only say one of the two. app/core/classification.py knows
+# to weigh these hints accordingly (ADR 0008); the translation from futnatv's
+# vocabulary to the canonical one is this source's job (ADR 0003).
+_YOUTH_CATEGORIES = frozenset({"Base"})
+_WOMEN_CATEGORIES = frozenset({"Feminino", "Eliminatórias Feminina"})
+
+
+def _hints(category: str | None) -> tuple[str | None, str | None]:
+    """Competition category -> (tier_hint, gender_hint).
+
+    No category means the schedule name did not match the catalog at all —
+    no evidence either way, not evidence of the default. And the catalog only
+    exists for football (docs/field-notes.md, "O que não existe"), so every
+    volleyball/basketball/NFL/NHL game arrives here with None.
+    """
+    if category is None:
+        return None, None
+    tier_hint = TIER_YOUTH if category in _YOUTH_CATEGORIES else TIER_PROFESSIONAL
+    gender_hint = GENDER_WOMEN if category in _WOMEN_CATEGORIES else GENDER_MEN
+    return tier_hint, gender_hint
 
 
 def _brief(raw: dict, limit: int = 200) -> str:
@@ -122,6 +153,9 @@ class FutnatvSource:
         odds_home, odds_draw, odds_away = parse_odds(raw.get("odds"))
         broadcast_raw = raw.get("broadcast", "") or ""
 
+        competition_id, competition_category = competitions.match(raw["competition"])
+        tier_hint, gender_hint = _hints(competition_category)
+
         broadcasts: list[NormalizedBroadcast] = []
         for token in split_broadcast(broadcast_raw):
             platform_text, qualifier_text = split_platform_qualifier(token)
@@ -142,7 +176,7 @@ class FutnatvSource:
             time_raw=raw["time"],
             kickoff_at=kickoff_at,
             competition_text=raw["competition"],
-            competition_id=competitions.match(raw["competition"]),
+            competition_id=competition_id,
             round=raw.get("round", "") or "",
             home_text=raw["home"],
             home_team_id=teams.resolve(raw["home"]),
@@ -164,4 +198,6 @@ class FutnatvSource:
                 "aggregate": raw.get("aggregate"),
                 "raw": raw,
             },
+            tier_hint=tier_hint,
+            gender_hint=gender_hint,
         )

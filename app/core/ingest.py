@@ -3,6 +3,11 @@ resolution — the only dimension whose matching logic (normalized name) is
 generic enough to live in the core instead of in each source (ADR 0003:
 `channel`/`competition` remain source-specific matching).
 
+It also applies the canonical competition classification (app/core/classification.py,
+ADR 0008) — generic for the same reason team resolution is: it works off
+`competition_text`, which every source hands over, and a source that offers no
+hint still gets classified from the name.
+
 Nothing here knows the format of a specific source — only the shape of
 `NormalizedGame` (app/core/source.py).
 """
@@ -19,6 +24,7 @@ from sqlalchemy.orm import Session
 from app.core.config import BRT, DAYS_AHEAD
 from app.core.models import Game, GameBroadcast, Team
 from app.core.source import NormalizedGame
+from app.core.classification import METHOD_CURATED, METHOD_PATTERN, classify
 
 _NATURAL_KEY_COLS = {
     "source_code", "sport_code", "game_date", "time_raw", "home_text", "away_text",
@@ -98,6 +104,10 @@ def upsert_games(session: Session, source_code: str, games: list[NormalizedGame]
     games. Does not commit — the caller decides the granularity
     (see app/core/jobs.py)."""
     for game in games:
+        # Recomputed on every capture, like the broadcasts below: the source's
+        # hints and the curated lists can both have changed since last time
+        # (ADR 0008).
+        classification = classify(game.competition_text, game.tier_hint, game.gender_hint)
         values = dict(
             source_code=source_code,
             sport_code=game.sport_code,
@@ -113,6 +123,10 @@ def upsert_games(session: Session, source_code: str, games: list[NormalizedGame]
             away_team_id=game.away_team_id,
             broadcast_raw=game.broadcast_raw,
             source_data=game.source_data,
+            tier=classification.tier,
+            tier_method=classification.tier_method,
+            gender=classification.gender,
+            gender_method=classification.gender_method,
         )
         update_values = {k: v for k, v in values.items() if k not in _NATURAL_KEY_COLS}
         update_values["last_seen_at"] = func.now()
@@ -127,3 +141,35 @@ def upsert_games(session: Session, source_code: str, games: list[NormalizedGame]
         _replace_broadcasts(session, game_id, game)
 
     return len(games)
+
+
+def reclassify_games(session: Session) -> dict:
+    """Re-apply app/core/classification.py to games already stored — what to run after
+    editing the curated lists, since `tier`/`gender` are resolved at ingestion
+    and the collection window only covers today..today+DAYS_AHEAD.
+
+    It deliberately only rewrites rows whose new classification stands on its
+    own — `curated` or `pattern`, both of which read nothing but the
+    competition name. A row whose current value came from a source hint cannot
+    be recomputed here (the hint lived in the source's catalog index at capture
+    time, not in the row), so recomputing it blindly would quietly demote it to
+    `unknown`. Skipping those makes this idempotent and incapable of losing
+    information: it only ever adds what curation and the name patterns now
+    know.
+    """
+    updated = 0
+    for game in session.scalars(select(Game)):
+        fresh = classify(game.competition_text)
+        if fresh.tier_method in (METHOD_CURATED, METHOD_PATTERN) and (
+            game.tier != fresh.tier or game.tier_method != fresh.tier_method
+        ):
+            game.tier = fresh.tier
+            game.tier_method = fresh.tier_method
+            updated += 1
+        if fresh.gender_method in (METHOD_CURATED, METHOD_PATTERN) and (
+            game.gender != fresh.gender or game.gender_method != fresh.gender_method
+        ):
+            game.gender = fresh.gender
+            game.gender_method = fresh.gender_method
+            updated += 1
+    return {"rows_updated": updated}

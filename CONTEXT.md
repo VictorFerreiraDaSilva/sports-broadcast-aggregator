@@ -29,3 +29,21 @@ _Avoid_: sport_code cru da fonte (esse é o esporte-da-fonte, não o canônico)
 Dimensão auxiliar (canal, competição ou time) usada para casar o texto livre de um jogo com
 uma entidade conhecida. Escopado por fonte — não é fundido entre fontes (ver ADR 0003).
 _Avoid_: Dimensão global, entidade compartilhada
+
+**Nível da competição**:
+Se uma competição é profissional ou de base. Eixo canônico do agregador, compartilhado entre
+fontes — nenhuma fonte o publica, porque todas colapsam nível, gênero e geografia num campo
+só (ver ADR 0008). Admite não saber: uma competição pode estar sem classificação.
+_Avoid_: Categoria (categoria é o campo colapsado da fonte, não este eixo), divisão, série
+
+**Gênero da competição**:
+Se uma competição é masculina ou feminina. Eixo canônico independente do nível — uma
+competição pode ser feminina e de base ao mesmo tempo, que é justamente o que o campo único
+da fonte não consegue expressar (ver ADR 0008). Também admite não saber.
+_Avoid_: Categoria, naipe
+
+**Relevância**:
+O quanto um jogo interessa a uma pessoa específica. **Não é conceito deste projeto** — o
+agregador descreve o mundo e não sabe quem está assistindo (ver ADR 0009). Nível e gênero são
+fatos sobre a competição; relevância é gosto, e mora no consumidor.
+_Avoid_: Usar "relevante" para dizer "profissional" ou "com transmissão"

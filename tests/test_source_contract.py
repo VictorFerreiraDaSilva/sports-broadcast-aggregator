@@ -84,3 +84,48 @@ def test_example_source_round_trip(db_session):
         db_session.query(Game).filter(Game.source_code == source.code).all()
     )
     assert count_first == count_second == len(games) == len(persisted)
+
+    # A source that contributes no hint still lands classified, not NULL — the
+    # example source knows nothing about app/core/classification.py (ADR 0008).
+    for game in persisted:
+        assert game.tier in ("professional", "youth", "unknown")
+        assert game.gender in ("men", "women", "unknown")
+        assert game.tier_method in ("curated", "source", "pattern", "none")
+
+
+def test_reclassify_only_ever_adds_knowledge(db_session):
+    """`reclassify` must be idempotent and must never demote a row: it rewrites
+    only what stands on the competition name alone (ADR 0008)."""
+    from app.core.ingest import reclassify_games
+    from app.core.models import Game
+
+    source = ExampleSource()
+    games = source.fetch_games(db_session, [dt.date(2026, 8, 24)])
+    upsert_games(db_session, source.code, games)
+    db_session.commit()
+
+    def game_named(competition_text):
+        return (
+            db_session.query(Game)
+            .filter(Game.source_code == source.code, Game.competition_text == competition_text)
+            .one()
+        )
+
+    # A row classified from a source hint we can no longer recompute.
+    hinted = game_named("Example League")
+    hinted.tier, hinted.tier_method = "professional", "source"
+    # A row a name pattern can now reach.
+    youth = game_named("Example Cup")
+    youth.competition_text, youth.tier, youth.tier_method = "Example Cup sub-20", "unknown", "none"
+    db_session.commit()
+
+    assert reclassify_games(db_session)["rows_updated"] == 1
+    db_session.commit()
+
+    db_session.refresh(hinted)
+    db_session.refresh(youth)
+    assert (hinted.tier, hinted.tier_method) == ("professional", "source"), "must not demote"
+    assert (youth.tier, youth.tier_method) == ("youth", "pattern")
+
+    # Running it again changes nothing.
+    assert reclassify_games(db_session)["rows_updated"] == 0

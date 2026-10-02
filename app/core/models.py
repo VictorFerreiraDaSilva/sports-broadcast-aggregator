@@ -11,6 +11,8 @@
   `source_code` is part of the natural key (ADR 0002). Columns peculiar to a
   single source (odds, icons, raw payload, ...) get no column of their own
   here: they go into `source_data: JSONB`, opaque to the core (ADR 0006).
+  `tier`/`gender` are the aggregator's own canonical classification of the
+  competition, not any source's — see app/core/classification.py and ADR 0008.
 - `game_broadcast`: `broadcast_raw` split into tokens matched against
   `channel` — the source hands this over resolved (see app/core/source.py).
 - `catalog_meta`: `version` of the catalog already synced, per source, to
@@ -172,6 +174,7 @@ class Game(Base):
         ),
         Index("ix_game_date_sport", "game_date", "sport_code"),
         Index("ix_game_source", "source_code"),
+        Index("ix_game_tier", "tier"),
         Index("ix_game_competition_id", "competition_id"),
         Index("ix_game_home_team_id", "home_team_id"),
         Index("ix_game_away_team_id", "away_team_id"),
@@ -202,6 +205,23 @@ class Game(Base):
     broadcast_raw: Mapped[str] = mapped_column(Text, nullable=False, default="")
     has_broadcast: Mapped[bool] = mapped_column(
         Boolean, Computed("broadcast_raw <> ''", persisted=True), nullable=False
+    )
+
+    # Canonical classification of the competition, resolved at ingestion by
+    # app/core/classification.py (ADR 0008). The `*_method` columns say which rule
+    # decided — `none` is the curation queue, `pattern` is what was guessed
+    # from the name.
+    tier: Mapped[str] = mapped_column(  # professional | youth | unknown
+        String(16), nullable=False, default="unknown", server_default="unknown"
+    )
+    tier_method: Mapped[str] = mapped_column(  # curated | source | pattern | none
+        String(16), nullable=False, default="none", server_default="none"
+    )
+    gender: Mapped[str] = mapped_column(  # men | women | unknown
+        String(16), nullable=False, default="unknown", server_default="unknown"
+    )
+    gender_method: Mapped[str] = mapped_column(  # curated | source | pattern | none
+        String(16), nullable=False, default="none", server_default="none"
     )
 
     source_data: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)

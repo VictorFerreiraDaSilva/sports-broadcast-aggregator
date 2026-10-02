@@ -158,16 +158,54 @@ class ChannelIndex:
         return None, "none"
 
 
+# Names the schedule writes that the published catalog carries under a
+# different name and does not list as an alias. Each entry is a *curated*
+# claim, never a heuristic: the catalog holds five competitions containing
+# "champions league" (UEFA, AFC, AFC 2, UEFA Women's, Pré-), so any generic
+# substring or family fallback here would silently pick the wrong one — which
+# is why ChannelIndex's family reduction has no counterpart in this class.
+#
+# `Champions League` was verified against the games themselves (Real Madrid,
+# Barcelona, PSG, Bayern, "Fase de Liga"): the schedule uses the bare name for
+# the UEFA competition and the catalog's own name for the others. If futnatv
+# ever starts writing the bare name for an AFC game, this line becomes wrong —
+# the curation query in the README (tier_method = 'none') is not what catches
+# that, so treat it as a claim to re-check when the AFC season starts.
+EXTRA_COMPETITION_ALIASES = {
+    "champions league": "UEFA Champions League",
+}
+
+
 class CompetitionIndex:
-    """normalized name/alias -> Competition.id."""
+    """normalized name/alias -> (Competition.id, Competition.category).
+
+    The category comes out with the id because the source, not the core, is
+    what may interpret futnatv's own vocabulary (ADR 0003) — it becomes the
+    `tier_hint`/`gender_hint` of app/core/classification.py (ADR 0008).
+    """
 
     def __init__(self, session: Session):
-        self._by_key: dict[str, int] = {}
+        self._by_key: dict[str, tuple[int, str]] = {}
+        # Real catalog names only: an EXTRA_COMPETITION_ALIASES target must be
+        # a competition the catalog actually publishes, never another alias.
+        by_name: dict[str, tuple[int, str]] = {}
         stmt = select(Competition).where(Competition.source_code == FUTNATV_SOURCE_CODE)
         for comp in session.scalars(stmt):
-            self._by_key[normalize_key(comp.name)] = comp.id
+            entry = (comp.id, comp.category)
+            by_name[normalize_key(comp.name)] = entry
+            self._by_key[normalize_key(comp.name)] = entry
             for alias in comp.aliases or []:
-                self._by_key.setdefault(normalize_key(alias), comp.id)
+                self._by_key.setdefault(normalize_key(alias), entry)
 
-    def match(self, competition_text: str) -> int | None:
-        return self._by_key.get(normalize_key(competition_text))
+        for alias, target_name in EXTRA_COMPETITION_ALIASES.items():
+            entry = by_name.get(normalize_key(target_name))
+            if entry is None:
+                # The catalog dropped or renamed the target: leave the alias
+                # unresolved rather than pointing it somewhere else.
+                log.warning("extra competition alias %r targets unknown %r", alias, target_name)
+                continue
+            self._by_key.setdefault(normalize_key(alias), entry)
+
+    def match(self, competition_text: str) -> tuple[int | None, str | None]:
+        entry = self._by_key.get(normalize_key(competition_text))
+        return entry if entry is not None else (None, None)

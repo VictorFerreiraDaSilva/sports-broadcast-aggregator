@@ -15,7 +15,7 @@ case "$1" in
   scheduler)
     exec python -m app.scheduler
     ;;
-  games|catalog)
+  games|catalog|reclassify)
     exec python -m app.main "$@"
     ;;
   *)

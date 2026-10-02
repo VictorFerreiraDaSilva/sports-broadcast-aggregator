@@ -4,8 +4,12 @@ Agrega jogos e onde assisti-los a partir de múltiplas fontes públicas (sites/A
 Cada fonte é coletada, normalizada para um modelo comum e gravada lado a lado com as demais —
 sem tentar fundir o mesmo jogo real relatado por fontes diferentes.
 
-Ver [CONTEXT.md](CONTEXT.md) para o glossário (Fonte, Jogo, Esporte canônico, Catálogo) e
-[docs/adr/](docs/adr/) para as decisões de arquitetura por trás do que segue.
+Ver [CONTEXT.md](CONTEXT.md) para o glossário (Fonte, Jogo, Esporte canônico, Catálogo, Nível e
+Gênero da competição) e [docs/adr/](docs/adr/) para as decisões de arquitetura por trás do que
+segue. O agregador não decide o que é relevante para ninguém nem envia mensagem alguma
+([ADR 0009](docs/adr/0009-personal-relevance-stays-out.md)) — quem consome o banco encontra em
+[docs/consumer-contract.md](docs/consumer-contract.md) o que ele oferece e o que fica do outro
+lado da fronteira.
 
 ## Arquitetura
 
@@ -47,10 +51,89 @@ Núcleo enxuto e comum a todas as fontes; peculiaridades de uma fonte (odds, íc
 | `source` | fontes registradas (seedada a partir de `app/core/registry.py`, não digitada à mão) |
 | `sport` | esporte canônico — a única dimensão compartilhada entre fontes |
 | `channel`, `competition`, `team` | dimensões **escopadas por fonte** (`source_code` entra na unicidade); o mesmo nome em fontes diferentes é uma linha diferente |
-| `game` | um jogo por linha, **por fonte que o relatou**; chave natural = `(source_code, sport_code, game_date, time_raw, home_text, away_text)` — sem fusão entre fontes |
+| `game` | um jogo por linha, **por fonte que o relatou**; chave natural = `(source_code, sport_code, game_date, time_raw, home_text, away_text)` — sem fusão entre fontes. Carrega também `tier`/`gender`, a classificação canônica da competição (ver abaixo) |
 | `game_broadcast` | tokens de `broadcast_raw` já casados contra `channel` pela própria fonte |
 | `catalog_meta` | última `version` sincronizada de cada catálogo, por fonte |
 | `scrape_run` | log de auditoria de cada execução de job, por fonte — `status` é `success`, `degraded` (gravou, mas engoliu erros) ou `error` |
+
+### Nível e gênero da competição
+
+As fontes publicam **um** campo `category` que espreme três eixos — geografia, gênero e nível
+(`Destaques`, `Brasil`, `Feminino`, `Base`, ...). Como os valores são exclusivos, uma competição
+feminina *e* de base só cabe num deles: a `Copa do Mundo Feminina sub-20` está em `Feminino`, e
+lida ingenuamente contaria como profissional.
+
+Por isso o agregador mantém dois eixos próprios, resolvidos na ingestão por
+[app/core/classification.py](app/core/classification.py) e gravados em `game`
+([ADR 0008](docs/adr/0008-competition-tier-and-gender-at-ingestion.md)):
+
+| Coluna | Valores | |
+|---|---|---|
+| `tier` | `professional` `youth` `unknown` | nível |
+| `gender` | `men` `women` `unknown` | gênero |
+| `tier_method` / `gender_method` | `curated` `source` `pattern` `none` | qual regra decidiu |
+
+A regra que dá forma a tudo: **a categoria da fonte é evidência apenas positiva.** `Base` afirma
+que é base; qualquer outra categoria não afirma nada sobre o nível. Então a precedência esgota a
+evidência de base antes de deixar a fonte afirmar `professional`:
+
+```
+1. curadoria em classification.py (nome normalizado)        → esse valor      [curated]
+2. dica da fonte diz base                          → youth           [source]
+3. padrão no nome (sub-NN, U-NN, júnior, youth...) → youth           [pattern]
+4. só então, dica da fonte diz não-base            → professional    [source]
+5. nada disparou                                   → unknown         [none]
+```
+
+`unknown` é valor explícito e contável de propósito: sem ele, tudo que ninguém classificou entra
+silenciosamente na conta como profissional — que é o viés a eliminar.
+
+**Por que isso importa.** Medido em 270 jogos (06–11/09, futnatv): base é 23 % do volume e 6,5 %
+das transmissões. Contá-la derruba a cobertura aparente em 13,6 pontos.
+
+| Recorte | Jogos | Com transmissão | % |
+|---|---:|---:|---:|
+| Tudo | 270 | 168 | 62,2 % |
+| Só profissional | 207 | 157 | **75,8 %** |
+| Só base | 63 | 11 | 17,5 % |
+
+Cobertura de transmissão por nível — **sempre por fonte**, nunca somando: cada fonte tem um
+recorte editorial diferente (o futebolnatv só lista jogo que já tem transmissão anunciada, então
+pontuaria 100 % por construção), e o [ADR 0002](docs/adr/0002-source-scoped-games-no-cross-source-merge.md)
+não funde o mesmo jogo entre fontes:
+
+```sql
+SELECT source_code, sport_code, tier,
+       count(*) AS jogos,
+       count(*) FILTER (WHERE has_broadcast) AS com_transmissao,
+       round(100.0 * count(*) FILTER (WHERE has_broadcast) / count(*), 1) AS pct
+FROM game
+WHERE game_date >= current_date - 30
+GROUP BY source_code, sport_code, tier
+ORDER BY source_code, sport_code, tier;
+```
+
+E a **fila de curadoria** — o que nenhuma regra classificou, ordenado por quanto pesa. É assim que
+se descobre o que falta em `classification.py` (e foi assim que apareceram os 18 jogos de
+`Champions League` que não casavam com o catálogo):
+
+```sql
+SELECT sport_code, competition_text,
+       count(*) AS jogos,
+       count(*) FILTER (WHERE has_broadcast) AS com_transmissao
+FROM game
+WHERE tier_method = 'none'
+GROUP BY sport_code, competition_text
+ORDER BY jogos DESC;
+```
+
+Trocar `tier_method = 'none'` por `= 'pattern'` mostra o outro lado: o que foi **adivinhado** pelo
+nome, sem confirmação da fonte nem da curadoria.
+
+Depois de editar as listas curadas em `classification.py`, os jogos já gravados fora da janela de
+coleta continuam com a classificação antiga — `docker compose run --rm aggregator reclassify`
+reaplica as regras que não dependem de dica da fonte (`curated` e `pattern`), sem nunca rebaixar
+uma linha.
 
 ## Rodando (Docker Compose)
 
@@ -72,6 +155,7 @@ scheduler. Para rodar um job manualmente (fora do agendamento):
 docker compose run --rm aggregator games              # coleta jogos de todas as fontes
 docker compose run --rm aggregator games --source futnatv
 docker compose run --rm aggregator catalog             # sincroniza o catálogo de toda fonte que tiver um
+docker compose run --rm aggregator reclassify          # reaplica classification.py aos jogos já gravados
 ```
 
 ## Notificações de erro
@@ -160,16 +244,24 @@ despercebido) e `MISFIRE_GRACE_SECONDS` separa "o job atrasou" de "o job não ro
 
 ## Testes
 
+Os testes recriam o schema do zero (`drop_all`), então rodam contra um Postgres descartável numa
+porta própria — **nunca** contra o de desenvolvimento na 5432:
+
 ```bash
+docker run -d --rm --name fut-test-pg -e POSTGRES_USER=fut -e POSTGRES_PASSWORD=fut \
+  -e POSTGRES_DB=fut -p 55432:5432 postgres:16-alpine
 pip install -r requirements-dev.txt
-DATABASE_URL=postgresql+psycopg://fut:fut@localhost:5432/fut_test pytest
+PYTHONPATH=. DATABASE_URL=postgresql+psycopg://fut:fut@localhost:55432/fut pytest
+docker stop fut-test-pg   # --rm apaga o container junto
 ```
 
-`tests/test_futnatv_normalize.py` é parsing puro, sem banco. `tests/test_source_contract.py`
+`tests/test_futnatv_normalize.py` e `tests/test_classification.py` são lógica pura, sem banco — o
+segundo cobre a precedência da classificação com casos tirados de jogos reais.
+`tests/test_futnatv_catalogs.py` cobre o índice de competições, incluindo os aliases curados.
+`tests/test_source_contract.py`
 exercita o protocol `Source` contra toda fonte registrada mais a `_example`, que o próprio teste
 instancia — a parte que toca banco roda contra ela (fake, sem rede) para não depender da API
-real; o schema é recriado do zero no banco de `DATABASE_URL`, então aponte para um Postgres
-descartável.
+real.
 
 ## Fontes
 

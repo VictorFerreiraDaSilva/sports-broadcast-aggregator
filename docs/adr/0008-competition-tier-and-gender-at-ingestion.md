@@ -35,6 +35,15 @@ cobertura de transmissão de 75,8 % para 62,2 %.
 
 **Consequência aceita:** como a classificação é resolvida na ingestão e a coleta só cobre
 hoje..hoje+`DAYS_AHEAD`, editar as listas curadas não reclassifica o passado.
-`python -m app.main reclassify` cobre isso, mas só reescreve o que não depende de dica da fonte
-(`curated`/`pattern`) — a dica vivia no índice do catálogo no momento da captura, não na linha,
-e recomputá-la às cegas rebaixaria a linha para `unknown`.
+`python -m app.main reclassify` cobre isso.
+
+**Revisão (2026-10-11): o reclassify também recupera a dica da fonte.** A versão original só
+reescrevia `curated`/`pattern`, supondo que a dica vivia apenas no índice do catálogo no momento
+da captura. Mas a linha guarda o `competition_id`, e `competition.category` está no banco: no
+primeiro deploy, 1.314 dos 1.629 jogos `unknown` estavam ligados ao catálogo. Agora cada fonte
+pode expor `competition_hints(category)` — a mesma tradução que usa na ingestão — e o reclassify
+a aplica via `game.competition_id`, sem o core aprender o vocabulário da fonte. Continua sem
+rebaixar nada: um eixo só é reescrito quando a nova classificação tem alguma regra por trás
+(qualquer método diferente de `none`). Fica de fora, por construção, o jogo que nunca casou com
+o catálogo; para esse, só a curadoria por nome. O risco aceito é a categoria ter mudado no
+catálogo desde a captura — a reclassificação usa a de hoje.

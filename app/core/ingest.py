@@ -16,15 +16,16 @@ from __future__ import annotations
 
 import datetime as dt
 import unicodedata
+from typing import Callable, Mapping
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.core.config import BRT, DAYS_AHEAD
-from app.core.models import Game, GameBroadcast, Team
+from app.core.models import Competition, Game, GameBroadcast, Team
 from app.core.source import NormalizedGame
-from app.core.classification import METHOD_CURATED, METHOD_PATTERN, classify
+from app.core.classification import METHOD_NONE, classify
 
 _NATURAL_KEY_COLS = {
     "source_code", "sport_code", "game_date", "time_raw", "home_text", "away_text",
@@ -143,30 +144,44 @@ def upsert_games(session: Session, source_code: str, games: list[NormalizedGame]
     return len(games)
 
 
-def reclassify_games(session: Session) -> dict:
+def reclassify_games(
+    session: Session,
+    competition_hints: Mapping[str, Callable[[str], tuple[str | None, str | None]]] | None = None,
+) -> dict:
     """Re-apply app/core/classification.py to games already stored — what to run after
     editing the curated lists, since `tier`/`gender` are resolved at ingestion
     and the collection window only covers today..today+DAYS_AHEAD.
 
-    It deliberately only rewrites rows whose new classification stands on its
-    own — `curated` or `pattern`, both of which read nothing but the
-    competition name. A row whose current value came from a source hint cannot
-    be recomputed here (the hint lived in the source's catalog index at capture
-    time, not in the row), so recomputing it blindly would quietly demote it to
-    `unknown`. Skipping those makes this idempotent and incapable of losing
-    information: it only ever adds what curation and the name patterns now
-    know.
+    The source hint is recomputed from what the row does keep: its
+    `competition_id`, whose `competition.category` each source translates
+    through its optional `competition_hints` (`competition_hints` here maps
+    source code -> that method). A source without it, or a game whose name never
+    matched the catalog, gets no hint — the same as at ingestion.
+
+    It only ever adds knowledge: an axis is rewritten only when the fresh
+    classification has a rule behind it (anything but `none`), so a row is
+    never demoted to `unknown`. That makes it idempotent and safe to rerun.
     """
+    competition_hints = competition_hints or {}
     updated = 0
-    for game in session.scalars(select(Game)):
-        fresh = classify(game.competition_text)
-        if fresh.tier_method in (METHOD_CURATED, METHOD_PATTERN) and (
+    rows = session.execute(
+        select(Game, Competition.category).outerjoin(
+            Competition, Competition.id == Game.competition_id
+        )
+    )
+    for game, category in rows:
+        to_hints = competition_hints.get(game.source_code)
+        tier_hint, gender_hint = (
+            to_hints(category) if to_hints is not None and category is not None else (None, None)
+        )
+        fresh = classify(game.competition_text, tier_hint, gender_hint)
+        if fresh.tier_method != METHOD_NONE and (
             game.tier != fresh.tier or game.tier_method != fresh.tier_method
         ):
             game.tier = fresh.tier
             game.tier_method = fresh.tier_method
             updated += 1
-        if fresh.gender_method in (METHOD_CURATED, METHOD_PATTERN) and (
+        if fresh.gender_method != METHOD_NONE and (
             game.gender != fresh.gender or game.gender_method != fresh.gender_method
         ):
             game.gender = fresh.gender

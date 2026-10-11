@@ -132,8 +132,8 @@ nome, sem confirmação da fonte nem da curadoria.
 
 Depois de editar as listas curadas em `classification.py`, os jogos já gravados fora da janela de
 coleta continuam com a classificação antiga — `docker compose run --rm aggregator reclassify`
-reaplica as regras que não dependem de dica da fonte (`curated` e `pattern`), sem nunca rebaixar
-uma linha.
+reaplica todas as regras — inclusive a dica da fonte, relida do catálogo pela `competition_id` do
+jogo — sem nunca rebaixar uma linha.
 
 ## Rodando (Docker Compose)
 

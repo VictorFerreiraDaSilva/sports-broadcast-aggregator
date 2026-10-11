@@ -102,3 +102,12 @@ class Source(Protocol):
     #
     # def sync_catalog(self, session: Session) -> dict: ...
     # catalog_schedule: Sequence[CronSchedule]
+    #
+    # Optional too, and only meaningful alongside a competition catalog: the
+    # translation from a stored `competition.category` to
+    # (`tier_hint`, `gender_hint`). It is what lets `reclassify` recompute a
+    # source hint for games captured before the hint existed (ADR 0008),
+    # through `game.competition_id`, without the core learning the source's
+    # vocabulary.
+    #
+    # def competition_hints(self, category: str) -> tuple[str | None, str | None]: ...

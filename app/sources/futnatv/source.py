@@ -94,6 +94,9 @@ class FutnatvSource:
     def sync_catalog(self, session: Session) -> dict:
         return sync_all_catalogs(session, self._client)
 
+    def competition_hints(self, category: str) -> tuple[str | None, str | None]:
+        return _hints(category)
+
     def fetch_games(self, session: Session, dates: Sequence[dt.date]) -> list[NormalizedGame]:
         competitions = CompetitionIndex(session)
         channels = ChannelIndex(session)

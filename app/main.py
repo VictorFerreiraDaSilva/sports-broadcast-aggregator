@@ -34,11 +34,15 @@ def main() -> None:
     ap.add_argument("--source", help="source code (default: every registered one)")
     args = ap.parse_args()
 
-    # Reclassification reads no source: it re-applies the curated lists and the
-    # name patterns to games already stored (see app/core/ingest.py).
+    # Reclassification makes no request: it re-applies the curated lists, the
+    # name patterns and each source's reading of its stored competition
+    # catalog to games already stored (see app/core/ingest.py).
     if args.job == "reclassify":
+        hints = {
+            s.code: s.competition_hints for s in SOURCES if hasattr(s, "competition_hints")
+        }
         session = SessionLocal()
-        result = reclassify_games(session)
+        result = reclassify_games(session, hints)
         session.commit()
         session.close()
         print(json.dumps(result, indent=2))

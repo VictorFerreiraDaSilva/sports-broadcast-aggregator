@@ -65,6 +65,27 @@ CURATED_TIER: dict[str, str] = {
     "copa do mundo feminina": TIER_PROFESSIONAL,  # basquete
     "sul-americano feminino": TIER_PROFESSIONAL,  # volei
     "cev eurovolley feminino": TIER_PROFESSIONAL,  # volei
+    "sul-americano masculino": TIER_PROFESSIONAL,  # volei
+    "euro masculino": TIER_PROFESSIONAL,  # volei
+    "cev eurovolley masculino": TIER_PROFESSIONAL,  # volei
+    "nba": TIER_PROFESSIONAL,  # basquete
+    "wnba": TIER_PROFESSIONAL,  # basquete
+    "euroliga": TIER_PROFESSIONAL,  # basquete
+    "supercopa da euroliga": TIER_PROFESSIONAL,  # basquete
+    # Gender unknown from the name alone; the level is not.
+    "taca brasil": TIER_PROFESSIONAL,  # volei
+    "supervolei": TIER_PROFESSIONAL,  # volei
+    "brasil cup feminino": TIER_PROFESSIONAL,  # volei
+    # Football names the schedule uses but the catalog does not carry (no
+    # competition_id, so no source hint) — 146 games on 2026-10-11.
+    "champions league": TIER_PROFESSIONAL,
+    "europa league": TIER_PROFESSIONAL,
+    "women's champions league": TIER_PROFESSIONAL,
+    "concacaf nations league": TIER_PROFESSIONAL,
+    "campeones cup": TIER_PROFESSIONAL,
+    "copa santa catarina": TIER_PROFESSIONAL,
+    "copa da liga do peru": TIER_PROFESSIONAL,
+    "campeonato mexicano feminino": TIER_PROFESSIONAL,
 }
 
 CURATED_GENDER: dict[str, str] = {
@@ -75,6 +96,22 @@ CURATED_GENDER: dict[str, str] = {
     # for these sports, and nothing in the name to read.
     "nfl": GENDER_MEN,
     "nhl": GENDER_MEN,
+    # "masculino" is deliberately not a pattern: men is the unmarked value, so
+    # the name only ever asserts it where someone wrote it on purpose.
+    "sul-americano masculino": GENDER_MEN,  # volei
+    "euro masculino": GENDER_MEN,  # volei
+    "cev eurovolley masculino": GENDER_MEN,  # volei
+    "nba": GENDER_MEN,  # basquete
+    "wnba": GENDER_WOMEN,  # basquete
+    "euroliga": GENDER_MEN,  # basquete
+    "supercopa da euroliga": GENDER_MEN,  # basquete
+    # Football names missing from the catalog, as in CURATED_TIER.
+    "champions league": GENDER_MEN,
+    "europa league": GENDER_MEN,
+    "concacaf nations league": GENDER_MEN,
+    "campeones cup": GENDER_MEN,
+    "copa santa catarina": GENDER_MEN,
+    "copa da liga do peru": GENDER_MEN,
 }
 
 

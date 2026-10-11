@@ -94,8 +94,8 @@ def test_example_source_round_trip(db_session):
 
 
 def test_reclassify_only_ever_adds_knowledge(db_session):
-    """`reclassify` must be idempotent and must never demote a row: it rewrites
-    only what stands on the competition name alone (ADR 0008)."""
+    """`reclassify` must be idempotent and must never demote a row: an axis it
+    cannot back with a rule is left as it is (ADR 0008)."""
     from app.core.ingest import reclassify_games
     from app.core.models import Game
 
@@ -111,7 +111,7 @@ def test_reclassify_only_ever_adds_knowledge(db_session):
             .one()
         )
 
-    # A row classified from a source hint we can no longer recompute.
+    # A row classified from a source hint we cannot recompute: no catalog link.
     hinted = game_named("Example League")
     hinted.tier, hinted.tier_method = "professional", "source"
     # A row a name pattern can now reach.
@@ -129,3 +129,53 @@ def test_reclassify_only_ever_adds_knowledge(db_session):
 
     # Running it again changes nothing.
     assert reclassify_games(db_session)["rows_updated"] == 0
+
+
+def test_reclassify_recovers_source_hint_through_the_catalog(db_session):
+    """A game captured before hints existed still points at its catalog entry;
+    `reclassify` reads the hint back through `competition_id`, translated by
+    the source's own `competition_hints` (ADR 0008)."""
+    from app.core.ingest import reclassify_games
+    from app.core.models import Competition, Game
+
+    source = ExampleSource()
+    upsert_games(db_session, source.code, source.fetch_games(db_session, [dt.date(2026, 8, 24)]))
+    competition = Competition(
+        source_code=source.code, name="Example League", category="Pro", priority=1
+    )
+    db_session.add(competition)
+    db_session.flush()
+
+    game = (
+        db_session.query(Game)
+        .filter(Game.source_code == source.code, Game.competition_text == "Example League")
+        .one()
+    )
+    game.competition_id = competition.id
+    game.tier, game.tier_method = "unknown", "none"
+    game.gender, game.gender_method = "unknown", "none"
+    db_session.commit()
+
+    def hints(category):
+        assert category == "Pro"
+        return "professional", "men"
+
+    # Without the source's translation there is no hint: nothing to add.
+    assert reclassify_games(db_session)["rows_updated"] == 0
+
+    assert reclassify_games(db_session, {source.code: hints})["rows_updated"] == 2
+    db_session.commit()
+    db_session.refresh(game)
+    assert (game.tier, game.tier_method) == ("professional", "source")
+    assert (game.gender, game.gender_method) == ("men", "source")
+
+    assert reclassify_games(db_session, {source.code: hints})["rows_updated"] == 0
+
+
+def test_futnatv_translates_its_categories_into_hints():
+    from app.sources.futnatv.source import FutnatvSource
+
+    source = FutnatvSource()
+    assert source.competition_hints("Base") == ("youth", "men")
+    assert source.competition_hints("Feminino") == ("professional", "women")
+    assert source.competition_hints("Europa") == ("professional", "men")

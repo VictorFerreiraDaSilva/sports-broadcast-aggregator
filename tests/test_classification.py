@@ -51,9 +51,10 @@ def test_source_category_asserts_professional_when_no_youth_evidence():
 
 
 def test_no_hint_and_no_pattern_is_unknown_not_professional():
-    """18 games of `Champions League` sat here before the catalog alias: no
-    match, so no hint. Absence of evidence must not read as professional."""
-    result = classify("Champions League")
+    """A generic name with no hint (the source's catalog link supplies it, see
+    the reclassify tests). Absence of evidence must not read as professional —
+    `Champions League` was the original case, before it was curated."""
+    result = classify("Amistoso")
     assert (result.tier, result.tier_method) == (TIER_UNKNOWN, METHOD_NONE)
     assert (result.gender, result.gender_method) == (GENDER_UNKNOWN, METHOD_NONE)
 
@@ -103,7 +104,7 @@ def test_pattern_does_not_fire_on_senior_competitions():
 
 
 def test_women_pattern_does_not_fire_on_mens_competitions():
-    for name in ("Brasileirão - Série A", "Campeonato Alemão", "NBA"):
+    for name in ("Brasileirão - Série A", "Campeonato Alemão", "MLS"):
         assert classify(name).gender == GENDER_UNKNOWN, name
 
 
@@ -112,3 +113,17 @@ def test_hints_are_optional():
     no source is required to know this system exists."""
     result = classify("Brasileirão sub-17")
     assert (result.tier, result.tier_method) == (TIER_YOUTH, METHOD_PATTERN)
+
+
+def test_curated_basketball_and_mens_volleyball():
+    """No catalog for these sports: 137 basketball and 31 men's volleyball games
+    sat at `unknown` on 2026-10-11."""
+    for name, gender in [
+        ("NBA", GENDER_MEN),
+        ("WNBA", GENDER_WOMEN),
+        ("EuroLiga", GENDER_MEN),
+        ("Sul-Americano Masculino", GENDER_MEN),
+    ]:
+        result = classify(name)
+        assert (result.tier, result.tier_method) == (TIER_PROFESSIONAL, METHOD_CURATED)
+        assert (result.gender, result.gender_method) == (gender, METHOD_CURATED)

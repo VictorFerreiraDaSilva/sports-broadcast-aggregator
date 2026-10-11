@@ -49,6 +49,38 @@ Duas coisas a notar nessa query:
   uma segunda fonte, escolha uma como principal ou deduplique explicitamente no consumidor — o
   agregador não faz isso por você.
 
+## Jogos que a fonte deixou de relatar
+
+O agregador **nunca apaga** um jogo. Uma linha de `game` é o que a fonte relatou em algum
+momento, e `last_seen_at` diz quando foi a última vez — só a coleta escreve nessa coluna. Daí
+saem duas situações que o consumidor precisa conhecer:
+
+- **Fantasma.** A fonte corrige o horário ou a grafia de um time (`Al-Shabab x Al-Taawon` de 15h00
+  para 14h45, `Rodina Moscow` para `Rodina`). Isso muda a chave natural, então entra uma linha
+  nova e a antiga fica para trás, com `last_seen_at` parado.
+- **Jogo retirado.** A fonte também tira da grade, ao longo do dia, jogos que não mudaram nem têm
+  substituto. Medido no backup de 11/10: em 04/10, 18 jogos (Argentino, Neerlandês Feminino,
+  amistosos) aparecem só na coleta das 06:00; em 12/09, 53 de 128. Não há como, olhando só o
+  banco, distinguir esse caso do fantasma.
+
+Por isso o agregador não faz pruning: "a fonte não listou mais" apagaria jogos reais junto com os
+fantasmas. Quem quiser só o que a fonte relata **agora** filtra pela última coleta bem-sucedida:
+
+```sql
+AND g.last_seen_at >= (
+  SELECT max(started_at) FROM scrape_run
+  WHERE source_code = g.source_code AND job_type = 'games' AND status = 'success'
+)
+```
+
+O custo é esconder também os jogos retirados — para uma grade enviada logo depois da coleta das
+06:00, é quase sempre o que se quer.
+
+E há duplicata que **vem da própria fonte**: em 11/10 o futnatv listava ao mesmo tempo
+`Abha x Al-Faisaly 12h15` e `Abha x Al-Faysaly 12h25`. Ambas foram vistas na última coleta, então o
+filtro acima não pega; se incomodar, deduplicar por competição + horário próximo + um time em comum
+é decisão do consumidor (ADR 0002).
+
 ## O que fica do lado do consumidor
 
 **As preferências**, numa planilha do Google, lida pelo nó nativo de Sheets do n8n. Formato que

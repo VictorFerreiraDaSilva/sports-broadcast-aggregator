@@ -131,6 +131,33 @@ def test_reclassify_only_ever_adds_knowledge(db_session):
     assert reclassify_games(db_session)["rows_updated"] == 0
 
 
+def test_reclassify_is_not_a_sighting(db_session):
+    """`last_seen_at` means the source reported the game; rewriting the
+    classification must leave it alone."""
+    from app.core.ingest import reclassify_games
+    from app.core.models import Game
+
+    source = ExampleSource()
+    upsert_games(db_session, source.code, source.fetch_games(db_session, [dt.date(2026, 8, 24)]))
+    db_session.commit()
+
+    game = (
+        db_session.query(Game)
+        .filter(Game.source_code == source.code, Game.competition_text == "Example Cup")
+        .one()
+    )
+    seen = dt.datetime(2026, 8, 24, 6, 0, tzinfo=dt.timezone.utc)
+    game.competition_text, game.tier, game.tier_method = "Example Cup sub-20", "unknown", "none"
+    game.last_seen_at = seen
+    db_session.commit()
+
+    assert reclassify_games(db_session)["rows_updated"] == 1
+    db_session.commit()
+    db_session.refresh(game)
+    assert game.tier == "youth"
+    assert game.last_seen_at == seen
+
+
 def test_reclassify_recovers_source_hint_through_the_catalog(db_session):
     """A game captured before hints existed still points at its catalog entry;
     `reclassify` reads the hint back through `competition_id`, translated by

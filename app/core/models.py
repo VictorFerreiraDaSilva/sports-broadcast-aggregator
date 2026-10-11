@@ -229,8 +229,11 @@ class Game(Base):
     first_seen_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+    # "When the source last reported this game" — set only by upsert_games. No
+    # `onupdate`: any other write to the row (reclassify, a manual fix) is not
+    # a sighting, and stamping it as one hides games the source has dropped.
     last_seen_at: Mapped[dt.datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
     competition: Mapped["Competition | None"] = relationship(back_populates="games")
